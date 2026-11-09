@@ -9,13 +9,21 @@ import os
 import sys
 import time
 import ctypes
-import win32con
-import win32gui
 import subprocess
 from typing import Optional
-from pywinauto import Application, WindowSpecification
+
+# 1. win32gui 임포트 전에 무조건 DPI 인식 및 사용자 데스크톱 전환을 먼저 수행해야 합니다.
+try:
+    ctypes.windll.user32.SetProcessDPIAware()
+except Exception:
+    pass
 
 from core.desktop_utils import switch_to_user_desktop
+switch_to_user_desktop()
+
+import win32con
+import win32gui
+from pywinauto import Application, WindowSpecification
 
 
 class AppController:
@@ -23,15 +31,6 @@ class AppController:
     EXE_NAME = "taKeeper.exe"
 
     def __init__(self):
-        # 1. DPI 인식 활성화 (실제 모니터 해상도 매핑)
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except Exception:
-            pass
-        
-        # 2. 사용자 모니터 데스크톱으로 스레드 전환
-        switch_to_user_desktop()
-        
         self.app: Optional[Application] = None
         self.main_window: Optional[WindowSpecification] = None
         self.hwnd: Optional[int] = None
@@ -56,7 +55,6 @@ class AppController:
         # 3. 창 뜰 때까지 대기 및 핸들 획득
         self.hwnd = self._wait_for_window(timeout=timeout)
         if not self.hwnd:
-            # 2차 시도
             print(">>> 1차 시도에서 창 미감지, 트레이 더블클릭 1회 재시도...")
             self._double_click_tray_icon()
             self.hwnd = self._wait_for_window(timeout=timeout)
