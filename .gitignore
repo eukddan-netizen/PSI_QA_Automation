@@ -1,0 +1,24 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing and reports
+.pytest_cache/
+reports/
+allure-results/
+allure-report/
+*.log
+
+# OS / Editor
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
