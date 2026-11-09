@@ -1,12 +1,10 @@
 """
 taKeeper.exe (보안점검 프로그램) 제어 및 WebView2 CDP 연결 컨트롤러
-관리자 권한(UAC) 실행 및 환경 변수 주입 지원
 """
 
 import os
 import sys
 import time
-import winreg
 import requests
 import subprocess
 from typing import Optional
@@ -15,8 +13,7 @@ from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
 
 class AppController:
     DEFAULT_EXE_PATH = r"C:\Program Files (x86)\topaegis\PRSv5\taKeeper.exe"
-    DEFAULT_DEBUG_PORT = 9222
-    ENV_VAR_NAME = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"
+    DEFAULT_DEBUG_PORT = 9333  # Teams 등 다른 WebView2 앱과의 충돌을 피하기 위해 9333 포트 사용
 
     def __init__(self, exe_path: str = DEFAULT_EXE_PATH, debug_port: int = DEFAULT_DEBUG_PORT):
         self.exe_path = exe_path
@@ -26,107 +23,61 @@ class AppController:
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
-        self._env_set_in_user_reg = False
 
-    def _set_user_environment_variable(self, port: int):
-        """
-        UAC 권한 상승으로 실행될 때도 환경 변수를 물려받을 수 있도록
-        HKCU\\Environment에 디버깅 포트 인자를 임시 등록합니다.
-        """
-        val = f"--remote-debugging-port={port}"
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_SET_VALUE) as key:
-                winreg.SetValueEx(key, self.ENV_VAR_NAME, 0, winreg.REG_SZ, val)
-                self._env_set_in_user_reg = True
-        except Exception as e:
-            print(f"[경고] 사용자 환경변수 등록 실패: {e}")
-
-    def _clear_user_environment_variable(self):
-        """임시 등록한 사용자 환경변수를 제거합니다."""
-        if not self._env_set_in_user_reg:
-            return
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_SET_VALUE) as key:
-                try:
-                    winreg.DeleteValue(key, self.ENV_VAR_NAME)
-                except FileNotFoundError:
-                    pass
-        except Exception:
-            pass
-        self._env_set_in_user_reg = False
-
-    def launch(self, timeout: int = 25):
-        """
-        taKeeper.exe를 원격 디버깅 모드로 실행하고 Playwright로 연결합니다.
-        """
-        # 1. 환경 변수 설정
-        debug_arg = f"--remote-debugging-port={self.debug_port}"
-        os.environ[self.ENV_VAR_NAME] = debug_arg
-        self._set_user_environment_variable(self.debug_port)
-
-        working_dir = os.path.dirname(self.exe_path)
-
-        # 2. 프로세스 실행 (일반 실행 실패 시 UAC RunAs 시도)
-        try:
-            self.process = subprocess.Popen(
-                [self.exe_path],
-                cwd=working_dir,
-                env=os.environ.copy()
-            )
-        except OSError as e:
-            if getattr(e, "winerror", None) == 740:  # Elevation required
-                print(">>> 관리자 권한 상승(UAC)으로 taKeeper.exe를 실행합니다...")
-                import ctypes
-                ret = ctypes.windll.shell32.ShellExecuteW(
-                    None, "runas", self.exe_path, "", working_dir, 1
-                )
-                if ret <= 32:
-                    raise RuntimeError(f"관리자 권한 실행 실패 (오류 코드: {ret})")
-            else:
-                raise
-
-        # 3. CDP 엔드포인트 대기
-        print(f">>> WebView2 디버깅 포트({self.debug_port}) 응답 대기 중...")
-        self._wait_for_cdp(timeout=timeout)
-
-        # 4. Playwright CDP 연결
-        print(">>> Playwright CDP 연결 시도 중...")
-        self._connect_playwright()
-        print(">>> Playwright 연결 성공!")
-
-    def _wait_for_cdp(self, timeout: int = 25):
+    def is_cdp_ready(self) -> bool:
+        """지정된 포트에서 WebView2 CDP가 응답하는지 확인합니다."""
         url = f"http://127.0.0.1:{self.debug_port}/json/version"
+        try:
+            resp = requests.get(url, timeout=1)
+            return resp.status_code == 200
+        except requests.RequestException:
+            return False
+
+    def connect(self, timeout: int = 10):
+        """
+        포트(9333)로 열려 있는 taKeeper WebView2 세션에 Playwright로 연결합니다.
+        """
+        print(f">>> 포트({self.debug_port})에서 taKeeper WebView2 연결 대기 중...")
         start_time = time.time()
         while time.time() - start_time < timeout:
-            try:
-                resp = requests.get(url, timeout=1)
-                if resp.status_code == 200:
-                    return
-            except requests.RequestException:
-                time.sleep(0.5)
-        raise TimeoutError(f"WebView2 CDP 포트({self.debug_port}) 연결 대기 시간({timeout}초) 초과")
+            if self.is_cdp_ready():
+                print(f">>> 포트({self.debug_port}) 응답 확인! Playwright로 연결합니다...")
+                self._connect_playwright()
+                return
+            time.sleep(1)
+
+        raise TimeoutError(
+            f"\n[연결 실패] 포트 {self.debug_port}에서 응답이 없습니다.\n"
+            f"👉 먼저 'd:\\psi_automation\\start_app_debug.bat' 파일을 실행하여\n"
+            f"   taKeeper를 디버그 모드로 띄운 후 다시 시도해 주세요!"
+        )
 
     def _connect_playwright(self):
         self._playwright = sync_playwright().start()
         cdp_url = f"http://localhost:{self.debug_port}"
         self.browser = self._playwright.chromium.connect_over_cdp(cdp_url)
         
-        # 열린 컨텍스트 확인
         contexts = self.browser.contexts
         if not contexts:
             raise RuntimeError("CDP 브라우저 컨텍스트를 찾을 수 없습니다.")
         self.context = contexts[0]
 
-        # 페이지가 뜰 때까지 잠시 대기
-        time.sleep(1)
-        pages = self.context.pages
-        if pages:
-            self.page = pages[0]
-        else:
-            self.page = self.context.wait_for_event("page", timeout=10000)
+        # 점검창 페이지 찾기
+        for _ in range(10):
+            pages = self.context.pages
+            if pages:
+                # about:blank가 아닌 실제 페이지 선호
+                for p in pages:
+                    if "about:blank" not in p.url:
+                        self.page = p
+                        return
+                self.page = pages[0]
+                return
+            time.sleep(0.5)
+            
+        self.page = self.context.wait_for_event("page", timeout=5000)
 
     def close(self):
-        """정리 및 종료"""
         try:
             if self.browser:
                 self.browser.close()
@@ -138,12 +89,3 @@ class AppController:
                 self._playwright.stop()
         except Exception:
             pass
-
-        if self.process:
-            try:
-                self.process.terminate()
-            except Exception:
-                pass
-            self.process = None
-
-        self._clear_user_environment_variable()

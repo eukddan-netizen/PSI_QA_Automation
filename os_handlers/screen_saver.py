@@ -87,3 +87,4 @@ class ScreenSaverHandler:
             winreg.SetValueEx(key, "ScreenSaveActive", 0, winreg.REG_SZ, "1")
             winreg.SetValueEx(key, "ScreenSaveTimeOut", 0, winreg.REG_SZ, timeout_sec)
             winreg.SetValueEx(key, "ScreenSaverIsSecure", 0, winreg.REG_SZ, is_secure_val)
+
