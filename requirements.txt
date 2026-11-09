@@ -4,4 +4,4 @@ playwright>=1.42.0
 pywinauto>=0.6.8
 requests>=2.31.0
 pyyaml>=6.0.1
-
+pillow>=10.0.0

@@ -1,91 +1,131 @@
 """
-taKeeper.exe (보안점검 프로그램) 제어 및 WebView2 CDP 연결 컨트롤러
+보안점검 프로그램(taKeeper.exe) 제어 컨트롤러
+- 시스템 트레이 자동 더블클릭을 통한 실제 모니터 창 실행
+- 백그라운드 프로세스 정리 및 창 핸들 획득
+- UI Automation 기반 창 제어
 """
 
 import os
 import sys
 import time
-import requests
+import ctypes
+import win32con
+import win32gui
 import subprocess
 from typing import Optional
-from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
+from pywinauto import Application, WindowSpecification
+
+from core.desktop_utils import switch_to_user_desktop
 
 
 class AppController:
-    DEFAULT_EXE_PATH = r"C:\Program Files (x86)\topaegis\PRSv5\taKeeper.exe"
-    DEFAULT_DEBUG_PORT = 9333  # Teams 등 다른 WebView2 앱과의 충돌을 피하기 위해 9333 포트 사용
+    WINDOW_TITLE = "내PC보안점검"
+    EXE_NAME = "taKeeper.exe"
 
-    def __init__(self, exe_path: str = DEFAULT_EXE_PATH, debug_port: int = DEFAULT_DEBUG_PORT):
-        self.exe_path = exe_path
-        self.debug_port = debug_port
-        self.process: Optional[subprocess.Popen] = None
-        self._playwright = None
-        self.browser: Optional[Browser] = None
-        self.context: Optional[BrowserContext] = None
-        self.page: Optional[Page] = None
-
-    def is_cdp_ready(self) -> bool:
-        """지정된 포트에서 WebView2 CDP가 응답하는지 확인합니다."""
-        url = f"http://127.0.0.1:{self.debug_port}/json/version"
+    def __init__(self):
+        # 1. DPI 인식 활성화 (실제 모니터 해상도 매핑)
         try:
-            resp = requests.get(url, timeout=1)
-            return resp.status_code == 200
-        except requests.RequestException:
-            return False
-
-    def connect(self, timeout: int = 10):
-        """
-        포트(9333)로 열려 있는 taKeeper WebView2 세션에 Playwright로 연결합니다.
-        """
-        print(f">>> 포트({self.debug_port})에서 taKeeper WebView2 연결 대기 중...")
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            if self.is_cdp_ready():
-                print(f">>> 포트({self.debug_port}) 응답 확인! Playwright로 연결합니다...")
-                self._connect_playwright()
-                return
-            time.sleep(1)
-
-        raise TimeoutError(
-            f"\n[연결 실패] 포트 {self.debug_port}에서 응답이 없습니다.\n"
-            f"👉 먼저 'd:\\psi_automation\\start_app_debug.bat' 파일을 실행하여\n"
-            f"   taKeeper를 디버그 모드로 띄운 후 다시 시도해 주세요!"
-        )
-
-    def _connect_playwright(self):
-        self._playwright = sync_playwright().start()
-        cdp_url = f"http://localhost:{self.debug_port}"
-        self.browser = self._playwright.chromium.connect_over_cdp(cdp_url)
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
         
-        contexts = self.browser.contexts
-        if not contexts:
-            raise RuntimeError("CDP 브라우저 컨텍스트를 찾을 수 없습니다.")
-        self.context = contexts[0]
+        # 2. 사용자 모니터 데스크톱으로 스레드 전환
+        switch_to_user_desktop()
+        
+        self.app: Optional[Application] = None
+        self.main_window: Optional[WindowSpecification] = None
+        self.hwnd: Optional[int] = None
 
-        # 점검창 페이지 찾기
-        for _ in range(10):
-            pages = self.context.pages
-            if pages:
-                # about:blank가 아닌 실제 페이지 선호
-                for p in pages:
-                    if "about:blank" not in p.url:
-                        self.page = p
-                        return
-                self.page = pages[0]
-                return
+    @classmethod
+    def kill_existing(cls):
+        """혹시 백그라운드에 남아있는 기존 프로세스 정리"""
+        os.system(f"taskkill /f /im {cls.EXE_NAME} >nul 2>&1")
+        time.sleep(1)
+
+    def launch(self, timeout: int = 15) -> WindowSpecification:
+        """
+        시스템 트레이 아이콘을 자동으로 더블클릭하여
+        사용자 실제 모니터에 보안점검 창을 띄우고 창 객체를 반환합니다.
+        """
+        # 1. 기존 프로세스 정리
+        self.kill_existing()
+
+        # 2. 트레이 더블클릭 실행
+        self._double_click_tray_icon()
+
+        # 3. 창 뜰 때까지 대기 및 핸들 획득
+        self.hwnd = self._wait_for_window(timeout=timeout)
+        if not self.hwnd:
+            # 2차 시도
+            print(">>> 1차 시도에서 창 미감지, 트레이 더블클릭 1회 재시도...")
+            self._double_click_tray_icon()
+            self.hwnd = self._wait_for_window(timeout=timeout)
+
+        if not self.hwnd:
+            raise TimeoutError(f"보안점검 창('{self.WINDOW_TITLE}')이 화면에 뜨지 않았습니다.")
+
+        # 4. 전면 활성화
+        try:
+            win32gui.ShowWindow(self.hwnd, win32con.SW_RESTORE)
+            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
+            win32gui.SetForegroundWindow(self.hwnd)
+        except Exception:
+            pass
+
+        # 5. pywinauto 바인딩
+        self.app = Application(backend="uia").connect(handle=self.hwnd)
+        self.main_window = self.app.window(handle=self.hwnd)
+        return self.main_window
+
+    def _double_click_tray_icon(self):
+        """작업표시줄 숨겨진 아이콘 영역에서 보안점검 아이콘 더블클릭"""
+        user32 = ctypes.windll.user32
+
+        def mouse_click(x, y):
+            user32.SetCursorPos(x, y)
+            time.sleep(0.05)
+            user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
+            time.sleep(0.05)
+            user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
+
+        # 1단계: 숨겨진 아이콘 표시(^) 버튼 클릭 (1515, 1170)
+        mouse_click(1515, 1170)
+        time.sleep(0.8)
+
+        # 2단계: TA-STR / TA-PRS 아이콘 더블클릭 (1465, 993)
+        user32.SetCursorPos(1465, 993)
+        time.sleep(0.1)
+        user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 1465, 993, 0, 0)
+        time.sleep(0.05)
+        user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 1465, 993, 0, 0)
+        time.sleep(0.1)
+        user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 1465, 993, 0, 0)
+        time.sleep(0.05)
+        user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 1465, 993, 0, 0)
+
+    def _wait_for_window(self, timeout: int = 15) -> Optional[int]:
+        """사용자 모니터에 표시된 창 핸들 탐색"""
+        start = time.time()
+        while time.time() - start < timeout:
+            target_hwnd = None
+            def cb(hwnd, extra):
+                nonlocal target_hwnd
+                if win32gui.IsWindow(hwnd) and win32gui.IsWindowVisible(hwnd):
+                    title = win32gui.GetWindowText(hwnd)
+                    if self.WINDOW_TITLE in title:
+                        target_hwnd = hwnd
+
+            win32gui.EnumWindows(cb, None)
+            if target_hwnd:
+                return target_hwnd
             time.sleep(0.5)
-            
-        self.page = self.context.wait_for_event("page", timeout=5000)
+        return None
 
     def close(self):
-        try:
-            if self.browser:
-                self.browser.close()
-        except Exception:
-            pass
-
-        try:
-            if self._playwright:
-                self._playwright.stop()
-        except Exception:
-            pass
+        """창 닫기 및 프로세스 종료"""
+        if self.hwnd and win32gui.IsWindow(self.hwnd):
+            try:
+                win32gui.PostMessage(self.hwnd, win32con.WM_CLOSE, 0, 0)
+            except Exception:
+                pass
+        self.kill_existing()
