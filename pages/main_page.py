@@ -43,26 +43,30 @@ class MainPage:
         app = Application(backend="uia").connect(handle=target_h)
         win = app.window(handle=target_h)
 
-        # 혹시 메인 탭이 아니라면 '메인' 탭 링크 먼저 클릭
-        for link in win.descendants(control_type="Hyperlink"):
-            if link.element_info.name == "메인":
-                print(">>> [MainPage] '메인' 탭 링크 클릭...")
-                try:
-                    link.invoke()
-                except Exception:
-                    self._click_element(link, target_h)
-                time.sleep(1.5)
-                break
-
-        # '▶ 점검 시작' 버튼 탐색 (최대 3초 대기)
+        # 웹뷰 DOM 렌더링 대기 및 '메인' 탭 / '▶ 점검 시작' 버튼 탐색 (최대 8초)
         start_btn = None
-        for _ in range(6):
+        clicked_main_tab = False
+        for _ in range(16):
             for b in win.descendants(control_type="Button"):
-                if "점검 시작" in b.element_info.name or "점검시작" in b.element_info.name:
+                b_name = b.element_info.name or ""
+                if "점검 시작" in b_name or "점검시작" in b_name:
                     start_btn = b
                     break
             if start_btn:
                 break
+
+            if not clicked_main_tab:
+                for link in win.descendants(control_type="Hyperlink"):
+                    if link.element_info.name == "메인":
+                        print(">>> [MainPage] '메인' 탭 링크 클릭...")
+                        try:
+                            link.invoke()
+                        except Exception:
+                            self._click_element(link, target_h)
+                        clicked_main_tab = True
+                        time.sleep(1.0)
+                        break
+
             time.sleep(0.5)
 
         if not start_btn:
@@ -71,6 +75,7 @@ class MainPage:
         print(f">>> [MainPage] '▶ 점검 시작' 버튼 발견: Screen={start_btn.rectangle()}")
         self._click_element(start_btn, target_h)
         print(">>> [MainPage] '▶ 점검 시작' 클릭 메시지 전송 완료!")
+        return True
 
     def _click_element(self, elem, hwnd):
         """UIA 요소의 좌표를 계산하여 PostMessage 클릭"""
