@@ -1,0 +1,538 @@
+# topAegis 내PC보안점검 (TA-PSI) 53개 점검 카탈로그 (기준: 69릴리즈 시트 72~420행 C열)
+# - 개편 시 점검 추가/삭제/번호 변경은 이 파일과 해당 점검 폴더만 수정하면 됩니다.
+# - Tier 분류 기준:
+#   * A: 레지스트리 / net 명령 / Windows 기본 설정만으로 상태를 만들 수 있어 완전 자동화 가능
+#   * B: 외부 프로그램(V3, 알약, Chrome, Java, 한글 등) 설치나 PowerShell 가상 파일/권한/재부팅 환경 구성이 필요
+#   * C: 관리 서버 정책 등록, 하드웨어/OS 빌드 의존, 대량 데이터(방화벽 IP 500개 등) 등 별도 환경이 필요
+#   * excluded: 수동만 가능하거나 테스트할 시나리오가 사실상 없어 자동화에서 제외 (사유 명시)
+
+checks:
+  - id: 1
+    marker: check01
+    folder: check_01_바이러스백신
+    short_name: 바이러스백신
+    title: "1. 바이러스 백신 설치 및 실행 여부 점검"
+    ui_keyword: "바이러스 백신 설치 및 실행"
+    tier: B
+    tier_reason: "V3 Lite, 알약 등 외부 백신 설치·실시간 감시 제어 및 Windows 보안 모달/서버 백신 지정 정책 연동이 필요함"
+    status: skeleton
+
+  - id: 2
+    marker: check02
+    folder: check_02_백신보안패치
+    short_name: 백신보안패치
+    title: "2. 바이러스 백신 최신 보안 패치 점검"
+    ui_keyword: "바이러스 백신 최신 보안 패치"
+    tier: B
+    tier_reason: "알약 구버전/최신 패치 상태 및 V3 등 외부 백신 프로그램 설치 환경 구성이 필요함"
+    status: skeleton
+
+  - id: 3
+    marker: check03
+    folder: check_03_OS보안패치
+    short_name: OS보안패치
+    title: "3. OS, MS 최신 보안 패치 점검"
+    ui_keyword: "최신 보안 패치 점검"
+    tier: B
+    tier_reason: "Windows 및 MS Office 보안 패치 롤백과 서버 설치 정책 변경 환경 구성이 필요함"
+    status: skeleton
+
+  - id: 4
+    marker: check04
+    folder: check_04_한글보안패치
+    short_name: 한글보안패치
+    title: "4. 한글 프로그램 최신 보안 패치 점검"
+    ui_keyword: "한글 프로그램 최신 보안 패치"
+    tier: B
+    tier_reason: "한컴오피스 한글 2022/2024 구버전 설치 및 패치 마법사 실행·재부팅 검증 환경이 필요함"
+    status: skeleton
+
+  - id: 5
+    marker: check05
+    folder: check_05_로그인암호안전성
+    short_name: 로그인암호안전성
+    title: "5. 로그인 암호 안전성 점검"
+    ui_keyword: "로그인 암호 안전성"
+    tier: B
+    tier_reason: "실제 Windows 로그인 암호 변경 및 앱 내 암호 입력/조치 모달의 다중 조합 상호작용이 필요함"
+    status: skeleton
+
+  - id: 6
+    marker: check06
+    folder: check_06_로그인암호분기변경
+    short_name: 로그인암호분기변경
+    title: "6. 로그인 암호 분기별 변경 여부 점검"
+    ui_keyword: "로그인 암호 분기별 변경"
+    tier: B
+    tier_reason: "시스템 날짜를 3개월 초과로 수동 변경하고 점검 시 뜨는 윈도우 로그인 암호 모달을 제어해야 함"
+    status: skeleton
+
+  - id: 7
+    marker: check07
+    folder: check_07_화면보호기
+    short_name: 화면보호기
+    title: "7. 화면 보호기 설정 여부 점검"
+    ui_keyword: "화면 보호기"
+    tier: A
+    tier_reason: "HKCU\\Control Panel\\Desktop 레지스트리(대기시간·로그온 화면 표시)만으로 취약 상태 주입 및 단일 클릭 조치가 가능함"
+    status: implemented
+
+  - id: 8
+    marker: check08
+    folder: check_08_공유폴더
+    short_name: 공유폴더
+    title: "8. 사용자 공유 폴더 존재 여부 점검"
+    ui_keyword: "사용자 공유 폴더"
+    tier: A
+    tier_reason: "net share 명령으로 임시 공유 폴더를 생성·해제하여 외부 의존성 없이 자동화 가능함"
+    status: skeleton
+
+  - id: 9
+    marker: check09
+    folder: check_09_USB자동실행
+    short_name: USB자동실행
+    title: "9. USB 자동 실행 여부 점검"
+    ui_keyword: "USB 자동 실행"
+    tier: excluded
+    tier_reason: "제외: 69릴리즈 시트에 테스트 조건과 기대 결과가 비어 있어 사실상 테스트할 시나리오가 없음"
+    status: excluded
+
+  - id: 10
+    marker: check10
+    folder: check_10_미사용ActiveX
+    short_name: 미사용ActiveX
+    title: "10. 미사용(3개월) ActiveX 프로그램 존재 여부 점검"
+    ui_keyword: "미사용(3개월) ActiveX"
+    tier: B
+    tier_reason: "PowerShell 스크립트로 System32/SysWOW64 가상 DLL 생성 및 32/64비트 CLSID·IE 사용 통계 바이너리 시간 주입이 필요함"
+    status: skeleton
+
+  - id: 11
+    marker: check11
+    folder: check_11_PDF보안패치
+    short_name: PDF보안패치
+    title: "11. PDF 프로그램 최신 보안 패치 점검"
+    ui_keyword: "PDF 프로그램 최신 보안 패치"
+    tier: B
+    tier_reason: "Chocolatey 등을 이용한 Adobe Acrobat Reader 구버전 설치 및 업데이트 환경 구성이 필요함"
+    status: skeleton
+
+  - id: 12
+    marker: check12
+    folder: check_12_편집프로그램
+    short_name: 편집프로그램
+    title: "12. 편집 프로그램 설치 여부 점검"
+    ui_keyword: "편집 프로그램 설치 여부"
+    tier: B
+    tier_reason: "한컴오피스 2024, MS Word 2024, Adobe Acrobat 등 대용량 상용 편집 프로그램 설치·제거가 필요함"
+    status: skeleton
+
+  - id: 13
+    marker: check13
+    folder: check_13_무선랜카드
+    short_name: 무선랜카드
+    title: "13. 무선랜카드 설치 여부 점검"
+    ui_keyword: "무선랜카드 설치 여부"
+    tier: C
+    tier_reason: "노트북 등 물리적 무선 LAN 인터페이스(Wi-Fi 하드웨어) 장착 여부에 의존하는 환경 점검임"
+    status: skeleton
+
+  - id: 14
+    marker: check14
+    folder: check_14_보안USB
+    short_name: 보안USB
+    title: "14. 보안 USB 설치 여부 점검"
+    ui_keyword: "보안 USB 설치 여부"
+    tier: A
+    tier_reason: "C:\\wwcnt 폴더 존재 여부만으로 취약/안전 판정 및 스텔스 폴더 생성 조치를 완전 자동화할 수 있음"
+    status: implemented
+
+  - id: 15
+    marker: check15
+    folder: check_15_금지SW
+    short_name: 금지SW
+    title: "15. 금지 SW 설치 여부 점검"
+    ui_keyword: "금지 SW 설치 여부"
+    tier: C
+    tier_reason: "관리 서버에서 금지 SW(TeamViewer, FileZilla 등) 정책을 등록하고 외부 프로그램 언인스톨러를 제어해야 함"
+    status: skeleton
+
+  - id: 16
+    marker: check16
+    folder: check_16_프로세스목록수집
+    short_name: 프로세스목록수집
+    title: "16. 사용자 PC 프로세스 목록 수집 기능"
+    ui_keyword: "사용자 PC 프로세스 목록 수집"
+    tier: excluded
+    tier_reason: "제외: 정상 Windows에서는 항상 안전(목록 출력)이며, 점검불가는 Windows OS 에러 상태에서만 발생하여 인위적 재현이 불가함"
+    status: excluded
+
+  - id: 17
+    marker: check17
+    folder: check_17_기타계정
+    short_name: 기타계정
+    title: "17. 메인 계정 외 기타 계정 존재 여부 점검"
+    ui_keyword: "메인 계정 외 기타 계정"
+    tier: A
+    tier_reason: "net user 명령으로 테스트용 로컬 계정을 추가·삭제하여 외부 도구 없이 자동화 가능함"
+    status: skeleton
+
+  - id: 18
+    marker: check18
+    folder: check_18_확장편집프로그램
+    short_name: 확장편집프로그램
+    title: "18. 확장 편집 프로그램 설치 여부 점검"
+    ui_keyword: "확장 편집 프로그램 설치 여부"
+    tier: B
+    tier_reason: "Microsoft Excel 및 PowerPoint 실제 설치·제거 환경 구성이 필요함"
+    status: skeleton
+
+  - id: 19
+    marker: check19
+    folder: check_19_FlashPlayer
+    short_name: FlashPlayer
+    title: "19. Adobe Flash Player 설치 여부 점검"
+    ui_keyword: "Adobe Flash Player 설치 여부"
+    tier: B
+    tier_reason: "Windows 7 호환성 모드로 구버전 Flash Player를 설치하고 설정 앱/언인스톨러로 수동 삭제해야 함"
+    status: skeleton
+
+  - id: 20
+    marker: check20
+    folder: check_20_JAVA보안패치
+    short_name: JAVA보안패치
+    title: "20. JAVA 최신 보안 패치 점검"
+    ui_keyword: "JAVA 최신 보안 패치"
+    tier: B
+    tier_reason: "Java 6, 7, 8, 21 버전별 런타임 설치 및 제거 환경 구성이 필요함"
+    status: skeleton
+
+  - id: 21
+    marker: check21
+    folder: check_21_방화벽실행
+    short_name: 방화벽실행
+    title: "21. 방화벽 실행 여부 점검"
+    ui_keyword: "방화벽 실행 여부"
+    tier: A
+    tier_reason: "netsh advfirewall 명령으로 개인/공용 네트워크 방화벽 ON/OFF 제어 및 단일 클릭 조치가 가능함"
+    status: skeleton
+
+  - id: 22
+    marker: check22
+    folder: check_22_복구콘솔자동로그온
+    short_name: 복구콘솔자동로그온
+    title: "22. 복구콘솔에서 자동로그온 금지 설정 여부 점검"
+    ui_keyword: "복구 콘솔에서 자동 로그온"
+    tier: A
+    tier_reason: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Setup\\RecoveryConsole의 SecurityLevel 레지스트리로 제어 가능함"
+    status: skeleton
+
+  - id: 23
+    marker: check23
+    folder: check_23_원격지원금지
+    short_name: 원격지원금지
+    title: "23. 원격 지원 금지 설정 여부 점검"
+    ui_keyword: "원격 데스크톱 설정 여부"
+    tier: A
+    tier_reason: "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server의 fDenyTSConnections 레지스트리로 제어 및 즉시 조치가 가능함"
+    status: skeleton
+
+  - id: 24
+    marker: check24
+    folder: check_24_NTFS파일시스템
+    short_name: NTFS파일시스템
+    title: "24. 파일 시스템 NTFS 사용 여부 점검"
+    ui_keyword: "파일 시스템 NTFS 사용 여부"
+    tier: B
+    tier_reason: "10GB 가상 하드 디스크(VHD) 파일을 생성·초기화하고 FAT32/NTFS 볼륨으로 포맷하는 디스크 환경 작업이 필요함"
+    status: skeleton
+
+  - id: 25
+    marker: check25
+    folder: check_25_멀티윈도우OS
+    short_name: 멀티윈도우OS
+    title: "25. 멀티 윈도우 OS 사용 여부 점검"
+    ui_keyword: "멀티 윈도우 OS 사용 여부"
+    tier: A
+    tier_reason: "bcdedit /copy 및 /delete 명령으로 테스트용 부팅 항목을 추가·삭제하여 자동화 가능함"
+    status: skeleton
+
+  - id: 26
+    marker: check26
+    folder: check_26_Chrome업데이트
+    short_name: Chrome업데이트
+    title: "26. Google Chrome 최신 업데이트 점검"
+    ui_keyword: "Google Chrome 최신 업데이트"
+    tier: B
+    tier_reason: "기존 Chrome 삭제(필요 시 재부팅) 및 특정 구버전 Chrome MSI 설치 환경 구성이 필요함"
+    status: skeleton
+
+  - id: 27
+    marker: check27
+    folder: check_27_유해SW
+    short_name: 유해SW
+    title: "27. 유해 SW 설치 여부 점검"
+    ui_keyword: "유해 SW 설치 여부"
+    tier: C
+    tier_reason: "관리 서버에서 유해 SW 정책을 등록하고 대상 프로그램 설치 및 언인스톨 모달을 제어해야 함"
+    status: skeleton
+
+  - id: 28
+    marker: check28
+    folder: check_28_유해ActiveX
+    short_name: 유해ActiveX
+    title: "28. 유해 ActiveX 설치 여부 점검"
+    ui_keyword: "유해 ActiveX 설치 여부"
+    tier: C
+    tier_reason: "PowerShell 가상 ActiveX 주입 후 관리 서버에서 유해 ActiveX 정책 및 예외 정책을 설정해야 함"
+    status: skeleton
+
+  - id: 29
+    marker: check29
+    folder: check_29_유해프로세스
+    short_name: 유해프로세스
+    title: "29. 유해 프로세스 실행 여부 점검"
+    ui_keyword: "유해 프로세스 실행 여부"
+    tier: C
+    tier_reason: "관리 서버에서 유해 프로세스(CalculatorApp.exe, notepad.exe)를 등록하고 에이전트를 재시작해야 함"
+    status: skeleton
+
+  - id: 30
+    marker: check30
+    folder: check_30_미사용계정
+    short_name: 미사용계정
+    title: "30. 미사용 계정 존재 여부 점검"
+    ui_keyword: "미사용 계정 존재 여부"
+    tier: A
+    tier_reason: "net user 명령으로 비활성(/active:no) 로컬 계정을 생성·삭제하여 자동화 가능함"
+    status: skeleton
+
+  - id: 31
+    marker: check31
+    folder: check_31_Guest계정
+    short_name: Guest계정
+    title: "31. Guest 계정 사용 여부 점검"
+    ui_keyword: "Guest 계정 사용 여부"
+    tier: A
+    tier_reason: "net user Guest /active:yes|no 명령만으로 상태를 제어하고 단일 클릭 조치를 검증할 수 있음"
+    status: implemented
+
+  - id: 32
+    marker: check32
+    folder: check_32_Administrator계정
+    short_name: Administrator계정
+    title: "32. Administrator 계정 사용 여부 점검"
+    ui_keyword: "Administrator 계정 사용 여부"
+    tier: A
+    tier_reason: "net user Administrator /active:yes|no 명령만으로 상태를 제어하고 단일 클릭 조치를 검증할 수 있음"
+    status: skeleton
+
+  - id: 33
+    marker: check33
+    folder: check_33_암호사용기간제한
+    short_name: 암호사용기간제한
+    title: "33. 암호 사용 기간 제한 설정 여부 점검"
+    ui_keyword: "암호 사용 기간 제한 설정 여부"
+    tier: A
+    tier_reason: "로컬 사용자 계정의 '암호 사용 기간 제한 없음(PasswordExpires)' 플래그를 명령어로 제어하여 자동화 가능함"
+    status: skeleton
+
+  - id: 34
+    marker: check34
+    folder: check_34_윈도우자동업데이트
+    short_name: 윈도우자동업데이트
+    title: "34. 윈도우 자동 업데이트 설정 여부 점검"
+    ui_keyword: "윈도우 자동 업데이트 설정 여부"
+    tier: excluded
+    tier_reason: "제외: 69릴리즈 시트에 기대 결과 명세가 비어 있고 서버 패치 업데이트 제어 모드와 연동되어 단독 자동화에서 제외함"
+    status: excluded
+
+  - id: 35
+    marker: check35
+    folder: check_35_보안센터실행
+    short_name: 보안센터실행
+    title: "35. 보안센터 실행 여부 점검"
+    ui_keyword: "보안센터 실행 여부"
+    tier: B
+    tier_reason: "wscsvc 서비스 레지스트리 키 소유자(Owner)/권한(ACL) 탈취 및 Start 값 변경 후 OS 재부팅이 필수임"
+    status: skeleton
+
+  - id: 36
+    marker: check36
+    folder: check_36_NTP시간동기화
+    short_name: NTP시간동기화
+    title: "36. NTP 시간서버와 자동 동기화 설정 여부 점검"
+    ui_keyword: "NTP 시간서버와 자동 동기화"
+    tier: A
+    tier_reason: "HKLM\\SYSTEM\\CurrentControlSet\\Services\\W32Time\\Parameters의 Type(NTP/noSync) 레지스트리로 제어 가능함"
+    status: skeleton
+
+  - id: 37
+    marker: check37
+    folder: check_37_최근암호기억
+    short_name: 최근암호기억
+    title: "37. 최근 암호 기억 기능 사용 여부 점검"
+    ui_keyword: "최근 암호 기억 기능 사용 여부"
+    tier: A
+    tier_reason: "net accounts /uniquepw:0|1 명령으로 로컬 암호 정책을 제어하고 즉시 조치를 검증할 수 있음"
+    status: skeleton
+
+  - id: 38
+    marker: check38
+    folder: check_38_암호사용최대기간
+    short_name: 암호사용최대기간
+    title: "38. 암호 사용 최대/최소 기간 설정 여부 점검"
+    ui_keyword: "암호 사용 최대/최소 기간 설정"
+    tier: A
+    tier_reason: "net accounts /maxpwage 명령으로 최대 암호 사용 기간(무기한 vs 90일)을 제어하여 자동화 가능함"
+    status: skeleton
+
+  - id: 39
+    marker: check39
+    folder: check_39_원격데스크톱포트
+    short_name: 원격데스크톱포트
+    title: "39. 원격 데스크톱 포트 설정 점검"
+    ui_keyword: "원격 데스크톱 포트 설정"
+    tier: C
+    tier_reason: "관리 서버의 원격 데스크톱 지정 포트 설정 유무에 따라 판정 및 조치 가능 여부가 달라져 서버 정책 연동이 필요함"
+    status: skeleton
+
+  - id: 40
+    marker: check40
+    folder: check_40_널세션접근제어
+    short_name: 널세션접근제어
+    title: "40. 비인가된 사용자의 널(Null) 세션 접근 제어 설정 여부 점검"
+    ui_keyword: "널(Null) 세션 접근 제어"
+    tier: A
+    tier_reason: "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa의 restrictanonymous 레지스트리(0/1)만으로 제어 및 단일 클릭 조치가 가능함"
+    status: implemented
+
+  - id: 41
+    marker: check41
+    folder: check_41_신뢰사이트
+    short_name: 신뢰사이트
+    title: "41. 신뢰 사이트 등록 여부 점검"
+    ui_keyword: "신뢰 사이트 등록 여부"
+    tier: C
+    tier_reason: "관리 서버에 테스트용 신뢰 사이트 URL을 등록하고 에이전트를 재시작해야 함"
+    status: skeleton
+
+  - id: 42
+    marker: check42
+    folder: check_42_UAC설정
+    short_name: UAC설정
+    title: "42. 사용자 계정 컨트롤(UAC) 설정 여부 점검"
+    ui_keyword: "사용자 계정 컨트롤(UAC)"
+    tier: A
+    tier_reason: "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System 레지스트리(ConsentPromptBehaviorAdmin 등)로 제어 가능함"
+    status: skeleton
+
+  - id: 43
+    marker: check43
+    folder: check_43_Host파일
+    short_name: Host파일
+    title: "43. Host 파일 사용 여부 점검"
+    ui_keyword: "Host 파일 사용 여부"
+    tier: A
+    tier_reason: "C:\\Windows\\System32\\drivers\\etc\\hosts 파일 백업·생성·삭제만으로 완전 자동화가 가능함"
+    status: skeleton
+
+  - id: 44
+    marker: check44
+    folder: check_44_인가된DNS
+    short_name: 인가된DNS
+    title: "44. 인가된 DNS 서버 사용 점검"
+    ui_keyword: "인가된 DNS 서버 사용"
+    tier: C
+    tier_reason: "관리 서버에 인가 DNS 주소(1개 또는 2개)를 등록하고 PC 네트워크 어댑터 DNS 설정과 대조해야 함"
+    status: skeleton
+
+  - id: 45
+    marker: check45
+    folder: check_45_절전모드
+    short_name: 절전모드
+    title: "45. 절전 모드 정책 설정 여부 점검"
+    ui_keyword: "절전 모드 정책 설정 여부"
+    tier: A
+    tier_reason: "PowerSchemes 절전 모드 레지스트리(ACSettingIndex: 0 vs 1800) 및 powercfg 명령으로 완전 자동화 가능함"
+    status: implemented
+
+  - id: 46
+    marker: check46
+    folder: check_46_하드디스크절전
+    short_name: 하드디스크절전
+    title: "46. 하드디스크 절전 정책 설정 여부 점검"
+    ui_keyword: "하드디스크 절전 정책 설정 여부"
+    tier: A
+    tier_reason: "PowerSchemes 하드디스크 끄기 레지스트리(ACSettingIndex: 0 vs 1200) 및 powercfg 명령으로 완전 자동화 가능함"
+    status: skeleton
+
+  - id: 47
+    marker: check47
+    folder: check_47_모니터절전
+    short_name: 모니터절전
+    title: "47. 모니터 절전 정책 설정 여부 점검"
+    ui_keyword: "모니터 절전 정책 설정 여부"
+    tier: A
+    tier_reason: "PowerSchemes 디스플레이 끄기 레지스트리(ACSettingIndex: 0 vs 600) 및 powercfg 명령으로 완전 자동화 가능함"
+    status: skeleton
+
+  - id: 48
+    marker: check48
+    folder: check_48_자동로그온금지
+    short_name: 자동로그온금지
+    title: "48. 윈도우 자동 로그온 금지 설정 여부 점검"
+    ui_keyword: "윈도우 자동 로그온 금지"
+    tier: A
+    tier_reason: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon의 AutoAdminLogon 레지스트리(1 vs 0)로 제어 가능함"
+    status: skeleton
+
+  - id: 49
+    marker: check49
+    folder: check_49_윈도우패치지원종료
+    short_name: 윈도우패치지원종료
+    title: "49. 윈도우 패치 지원 종료 여부 점검"
+    ui_keyword: "윈도우 패치 지원 종료 여부"
+    tier: C
+    tier_reason: "설치된 Windows OS 에디션 및 빌드 버전(Win 10 22H2 vs Win 11 25H2) 자체에 의존함"
+    status: skeleton
+
+  - id: 50
+    marker: check50
+    folder: check_50_비인가무선AP
+    short_name: 비인가무선AP
+    title: "50. 비인가 무선 AP 사용 여부 점검"
+    ui_keyword: "비인가 무선 AP 사용 여부"
+    tier: C
+    tier_reason: "관리 서버의 무선 AP 허용 정책 등록 및 PC의 Wi-Fi 알려진 네트워크 프로필 환경이 필요함"
+    status: skeleton
+
+  - id: 51
+    marker: check51
+    folder: check_51_비인가서비스
+    short_name: 비인가서비스
+    title: "51. 비인가 서비스 사용 여부 점검"
+    ui_keyword: "비인가 서비스"
+    tier: C
+    tier_reason: "관리 서버에 비인가 서비스(XblGameSave, XboxNetApiSvc) 정책을 등록하고 에이전트를 재시작해야 함"
+    status: skeleton
+
+  - id: 52
+    marker: check52
+    folder: check_52_비인가메신저
+    short_name: 비인가메신저
+    title: "52. 비인가 메신저 사용 여부 점검"
+    ui_keyword: "비인가 메신저 사용 여부"
+    tier: C
+    tier_reason: "관리 서버에 비인가 메신저(카카오톡 등) 정책을 등록하고 실제 메신저 설치·언인스톨러 실행이 필요함"
+    status: skeleton
+
+  - id: 53
+    marker: check53
+    folder: check_53_방화벽정책
+    short_name: 방화벽정책
+    title: "53. 방화벽 정책 설정 여부 점검"
+    ui_keyword: "방화벽 정책 설정 여부"
+    tier: C
+    tier_reason: "관리 서버에서 방화벽 정책 및 대량 원격 IP(50개씩 총 500개 호스트/서브넷)를 등록·배포해야 함"
+    status: skeleton
