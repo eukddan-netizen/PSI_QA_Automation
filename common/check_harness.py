@@ -46,62 +46,66 @@ def run_standard_vulnerable_to_safe_flow(
     hwnd = controller.hwnd
     assert hwnd, "내PC보안점검(taKeeper.exe) 메인 윈도우 핸들(HWND) 획득 실패"
 
-    main_page = MainPage(hwnd)
-    main_page.click_start_inspection()
-    main_page.wait_for_inspection_done(timeout=wait_seconds)
+    try:
+        main_page = MainPage(hwnd)
+        main_page.click_start_inspection()
+        main_page.wait_for_inspection_done(timeout=wait_seconds)
 
-    result_page = InspectionResultPage(hwnd)
-    result_page.navigate_to_results()
-
-    # 3) 검증: UI의 판정('취약') 및 조치 전 요약 통계(점수/취약 카운트) 확인
-    print(f">>> [3단계: 검증] 점검결과 화면에서 {check_num}번('{item_keyword}') 판정 확인")
-    before_stats = result_page.get_summary_stats()
-    print(f">>> [조치 전 상단 요약]: {before_stats}")
-
-    status, btn = result_page.get_item_info(item_name=item_keyword, check_num=check_num)
-    btn_name = btn.element_info.name if btn else None
-    print(f">>> [진단 결과] 상태: '{status}', 버튼: '{btn_name}'")
-    assert status == "취약", f"[{check_num:02d}번] 기대 상태는 '취약'이나 실제 UI 상태는 '{status}'입니다."
-
-    # 4) 조치: '조치' 버튼이 있으면 클릭, 서버 정책상 '조치' 버튼 미지원 항목이면 OS 안전 상태 주입 후 '재점검' 클릭
-    if btn is not None and btn_name == "조치":
-        print(f">>> [4단계: 조치] {check_num}번('{item_keyword}') '조치' 버튼 클릭 및 실시간 검증")
-        clicked = result_page.click_remediate_button_for_item(item_name=item_keyword, check_num=check_num)
-        assert clicked, f"[{check_num:02d}번] '조치' 버튼 클릭 실패"
-    else:
-        print(
-            f">>> [4단계: 조치(재점검)] {check_num}번('{item_keyword}') 항목은 현재 서버 정책상 자동 조치 버튼이 없으므로 "
-            f"OS 안전 상태를 적용한 뒤 '재점검'을 수행합니다."
-        )
-        handler.set_secure(state_guard)
-        result_page.click_reinspect()
+        result_page = InspectionResultPage(hwnd)
         result_page.navigate_to_results()
 
-    # 조치 적용 후 UI 상태 재조회 (필요 시 짧은 폴링)
-    new_status, new_btn = None, None
-    for _ in range(3):
-        new_status, new_btn = result_page.get_item_info(item_name=item_keyword, check_num=check_num)
-        if new_status == "안전":
-            break
-        time.sleep(1.5)
+        # 3) 검증: UI의 판정('취약') 및 조치 전 요약 통계(점수/취약 카운트) 확인
+        print(f">>> [3단계: 검증] 점검결과 화면에서 {check_num}번('{item_keyword}') 판정 확인")
+        before_stats = result_page.get_summary_stats()
+        print(f">>> [조치 전 상단 요약]: {before_stats}")
 
-    print(
-        f">>> [조치 직후 UI 상태]: '{new_status}', "
-        f"버튼: '{new_btn.element_info.name if new_btn else None}'"
-    )
-    assert new_status == "안전", (
-        f"[{check_num:02d}번] 조치 클릭 후 UI 상태가 '안전'으로 변경되지 않았습니다 (현재: '{new_status}')"
-    )
-    if new_btn is not None:
-        assert new_btn.element_info.name == "상세보기", (
-            f"[{check_num:02d}번] 조치 후 버튼이 '상세보기'로 전환되지 않았습니다 (현재: '{new_btn.element_info.name}')"
+        status, btn = result_page.get_item_info(item_name=item_keyword, check_num=check_num)
+        btn_name = btn.element_info.name if btn else None
+        print(f">>> [진단 결과] 상태: '{status}', 버튼: '{btn_name}'")
+        assert status == "취약", f"[{check_num:02d}번] 기대 상태는 '취약'이나 실제 UI 상태는 '{status}'입니다."
+
+        # 4) 조치: '조치' 버튼이 있으면 클릭, 서버 정책상 '조치' 버튼 미지원 항목이면 OS 안전 상태 주입 후 '재점검' 클릭
+        if btn is not None and btn_name == "조치":
+            print(f">>> [4단계: 조치] {check_num}번('{item_keyword}') '조치' 버튼 클릭 및 실시간 검증")
+            clicked = result_page.click_remediate_button_for_item(item_name=item_keyword, check_num=check_num)
+            assert clicked, f"[{check_num:02d}번] '조치' 버튼 클릭 실패"
+        else:
+            print(
+                f">>> [4단계: 조치(재점검)] {check_num}번('{item_keyword}') 항목은 현재 서버 정책상 자동 조치 버튼이 없으므로 "
+                f"OS 안전 상태를 적용한 뒤 '재점검'을 수행합니다."
+            )
+            handler.set_secure(state_guard)
+            result_page.click_reinspect()
+            result_page.navigate_to_results()
+
+        # 조치 적용 후 UI 상태 재조회 (필요 시 짧은 폴링)
+        new_status, new_btn = None, None
+        for _ in range(3):
+            new_status, new_btn = result_page.get_item_info(item_name=item_keyword, check_num=check_num)
+            if new_status == "안전":
+                break
+            time.sleep(1.5)
+
+        print(
+            f">>> [조치 직후 UI 상태]: '{new_status}', "
+            f"버튼: '{new_btn.element_info.name if new_btn else None}'"
         )
+        assert new_status == "안전", (
+            f"[{check_num:02d}번] 조치 클릭 후 UI 상태가 '안전'으로 변경되지 않았습니다 (현재: '{new_status}')"
+        )
+        if new_btn is not None:
+            assert new_btn.element_info.name == "상세보기", (
+                f"[{check_num:02d}번] 조치 후 버튼이 '상세보기'로 전환되지 않았습니다 (현재: '{new_btn.element_info.name}')"
+            )
 
-    after_stats = result_page.get_summary_stats()
-    result_page.verify_common_remediation_metrics(before_stats, after_stats)
+        after_stats = result_page.get_summary_stats()
+        result_page.verify_common_remediation_metrics(before_stats, after_stats)
 
-    is_os_safe, os_desc_after = handler.is_secure()
-    print(f">>> [조치 직후 실제 OS 검증]: 안전여부={is_os_safe} ({os_desc_after})")
-    assert is_os_safe, f"[{check_num:02d}번] UI는 '안전'이나 실제 OS 설정이 조치되지 않았습니다: {os_desc_after}"
+        is_os_safe, os_desc_after = handler.is_secure()
+        print(f">>> [조치 직후 실제 OS 검증]: 안전여부={is_os_safe} ({os_desc_after})")
+        assert is_os_safe, f"[{check_num:02d}번] UI는 '안전'이나 실제 OS 설정이 조치되지 않았습니다: {os_desc_after}"
+    finally:
+        print(">>> [정리] 보안점검 앱 창 닫기")
+        controller.close()
 
     print(f"========== [{check_num:02d}번 점검 ({item_keyword}) E2E 테스트 통과!] ==========\n")

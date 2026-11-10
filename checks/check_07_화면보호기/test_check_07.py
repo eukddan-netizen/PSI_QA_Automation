@@ -25,16 +25,20 @@ class TestCheck07화면보호기:
         hwnd = controller.hwnd
         assert hwnd, "내PC보안점검 앱 실행 실패"
 
-        main_page = MainPage(hwnd)
-        main_page.click_start_inspection()
-        main_page.wait_for_inspection_done(timeout=12)
+        try:
+            main_page = MainPage(hwnd)
+            main_page.click_start_inspection()
+            main_page.wait_for_inspection_done(timeout=12)
 
-        result_page = InspectionResultPage(hwnd)
-        result_page.navigate_to_results()
+            result_page = InspectionResultPage(hwnd)
+            result_page.navigate_to_results()
 
-        status, btn = result_page.get_item_info(item_name="화면 보호기", check_num=7)
-        print(f">>> [07번] 기본 안전상태 판정: status='{status}', btn='{btn.element_info.name if btn else None}'")
-        assert status == "안전", f"기본 안전 상태에서 '안전'으로 판정되지 않았습니다: {status}"
+            status, btn = result_page.get_item_info(item_name="화면 보호기", check_num=7)
+            print(f">>> [07번] 기본 안전상태 판정: status='{status}', btn='{btn.element_info.name if btn else None}'")
+            assert status == "안전", f"기본 안전 상태에서 '안전'으로 판정되지 않았습니다: {status}"
+        finally:
+            print(">>> [07번] 보안점검 앱 창 닫기")
+            controller.close()
 
     def test_02_대기시간_초과(self, state_guard):
         """[취약] 대기 15분 주입 ➔ 조치 후 10분 정상 복구 검증"""
