@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Position=0)]
     [string]$Target
 )
@@ -15,8 +15,15 @@ if ([string]::IsNullOrWhiteSpace($Target)) {
     Write-Host "  .\run <점검번호>     예: .\run 7, .\run 14, .\run 45"
     Write-Host "  .\run pilot          구현된 시범 점검(7, 14, 45번) 일괄 실행"
     Write-Host "  .\run tier_a         Tier A 점검 실행"
-    Write-Host "  .\run list           전체 53개 점검 목록 확인"
+    Write-Host "  .\run app            프로그램 자체 UI/기능 점검(app_checks) 실행"
+    Write-Host "  .\run list           전체 점검 목록 확인"
     exit 0
+}
+
+if ($Target -eq "app") {
+    Write-Host "[실행] 프로그램 자체 UI 및 기능 점검(app_checks) 실행 중..." -ForegroundColor Green
+    & $VenvPytest -m app_check -s
+    exit $LASTEXITCODE
 }
 
 if ($Target -eq "pilot") {

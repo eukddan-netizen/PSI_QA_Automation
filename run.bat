@@ -14,8 +14,15 @@ if "%~1"=="" (
     echo   run ^<점검번호^>     예: run 7, run 14, run 45
     echo   run pilot          구현된 시범 점검^(7, 14, 45번^) 일괄 실행
     echo   run tier_a         Tier A 점검 실행
-    echo   run list           전체 53개 점검 목록 확인
+    echo   run app            프로그램 자체 UI/기능 점검^(app_checks^) 실행
+    echo   run list           전체 점검 목록 확인
     exit /b 0
+)
+
+if /i "%~1"=="app" (
+    echo [실행] 프로그램 자체 UI 및 기능 점검^(app_checks^) 실행 중...
+    "%VENV_PYTEST%" -m app_check -s
+    exit /b %errorlevel%
 )
 
 if /i "%~1"=="pilot" (

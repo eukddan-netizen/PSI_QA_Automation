@@ -18,7 +18,9 @@ import pytest
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CATALOG_PATH = PROJECT_ROOT / "checks" / "catalog.yaml"
+CATALOG_PATH = PROJECT_ROOT / "tests" / "security_checks" / "catalog.yaml"
+if not CATALOG_PATH.exists():
+    CATALOG_PATH = PROJECT_ROOT / "checks" / "catalog.yaml"
 
 HIVE_MAP = {
     "HKCU": winreg.HKEY_CURRENT_USER,

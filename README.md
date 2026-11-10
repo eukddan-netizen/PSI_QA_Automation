@@ -22,7 +22,10 @@ Windows 데스크톱 보안점검 프로그램(`taKeeper.exe`, CefSharp 임베�
 # 현재 구현된 시범 점검(7, 14, 45번) 한 번에 실행
 .\run pilot
 
-# 전체 53개 점검 목록 확인
+# 프로그램 자체 UI/기능 점검(app_checks) 전체 실행
+.\run app
+
+# 전체 점검 및 테스트 목록 확인
 .\run list
 ```
 
@@ -68,19 +71,29 @@ Windows 데스크톱 보안점검 프로그램(`taKeeper.exe`, CefSharp 임베�
 
 ```text
 d:\psi_automation/
-├─ checks/                      # 53개 점검별 독립 폴더 (폴더당 파일 3개 원칙)
-│  ├─ catalog.yaml              # 53개 전체 점검 카탈로그 (번호, 이름, UI키워드, Tier, 구현상태)
-│  ├─ check_01_바이러스백신/
-│  │  ├─ handler.py             # 점검 전용 OS 상태 제어 (set_vulnerable, set_secure, is_secure)
-│  │  ├─ test_check_01.py       # pytest 테스트 실행 코드
-│  │  └─ README.md              # 엑셀 기반 판정 기준, 안내 문구, 조치 동작 명세서
-│  ├─ ...
-│  ├─ check_07_화면보호기/       # [구현/통과] HKCU 레지스트리 기반 점검
-│  ├─ check_14_보안USB/         # [구현/통과] 로컬 파일시스템(C:\wwcnt) 기반 점검
-│  ├─ check_31_Guest계정/       # [구현] net user Guest 명령 기반 점검 (관리자 권한 시 실행)
-│  ├─ check_40_널세션접근제어/   # [구현] HKLM 시스템 보안 레지스트리 기반 점검 (관리자 권한 시 실행)
-│  ├─ check_45_절전모드/         # [구현/통과] powercfg 명령 및 HKLM PowerSchemes 레지스트리 기반
-│  └─ ... (check_01 ~ check_53 총 53개 폴더)
+├─ tests/                          # 전체 테스트 스위트 (단일 상위 폴더)
+│  ├─ security_checks/             # 53개 보안점검 항목별 독립 모듈 (check_01 ~ check_53)
+│  │  ├─ catalog.yaml              # 53개 전체 보안점검 카탈로그 (번호, 이름, UI키워드, Tier)
+│  │  ├─ check_01_바이러스백신/
+│  │  │  ├─ handler.py             # 점검 전용 OS 상태 제어 (set_vulnerable, set_secure, is_secure)
+│  │  │  ├─ test_check_01.py       # pytest 테스트 실행 코드
+│  │  │  └─ README.md              # 엑셀 기반 판정 기준, 안내 문구, 조치 동작 명세서
+│  │  ├─ check_07_화면보호기/       # [구현/통과] HKCU 레지스트리 기반 점검
+│  │  ├─ check_14_보안USB/         # [구현/통과] 로컬 파일시스템(C:\wwcnt) 기반 점검
+│  │  ├─ check_31_Guest계정/       # [구현] net user Guest 명령 기반 점검 (관리자 권한 시 실행)
+│  │  ├─ check_40_널세션접근제어/   # [구현] HKLM 시스템 보안 레지스트리 기반 점검 (관리자 권한 시 실행)
+│  │  ├─ check_45_절전모드/         # [구현/통과] powercfg 명령 및 HKLM PowerSchemes 레지스트리 기반
+│  │  └─ ... (check_01 ~ check_53 총 53개 폴더)
+│  │
+│  └─ app_checks/                  # 프로그램 자체 UI 및 기능 점검 (엑셀 69릴리즈 9~71행 기반)
+│     ├─ catalog_app.yaml          # 7개 앱 기능 카탈로그 (트레이, 대시보드, 점검, 이력, 정리, 설정, 결과)
+│     ├─ 01_tray_menu/             # [Row 9~19] 트레이 우클릭 메뉴 및 사용자정보 웹뷰 유효성 검증
+│     ├─ 02_main_dashboard/        # [Row 20~34] 메인 대시보드 방패/경고팝업, 지표 hover, 도움말/암호 모달
+│     ├─ 03_inspection_run/        # [Row 35~37] 점검 진행 프로그레스바(100%) 및 탭 자동 전환
+│     ├─ 04_history/               # [Row 38~47] 점검이력 아코디언 토글 및 엑셀 내보내기/정합성 검증
+│     ├─ 05_pc_clean/              # [Row 48~58] OS버전/백신/방화벽 동기화, 임시파일/브라우저캐시 실제 삭제
+│     ├─ 06_settings/              # [Row 59~65] 결과이동 옵션 해제 팝업, 다크/라이트 테마 및 버전 정보
+│     └─ 07_result_common/         # [Row 66~71] 결과화면 방패/카운트 무결성, 컬럼 헤더 정렬 검증
 │
 ├─ common/                      # 전 점검 공통 인프라
 │  ├─ os_utils.py               # 레지스트리/명령어 제어, StateGuard 원복 가드, 동적 핸들러 로더
@@ -107,7 +120,7 @@ d:\psi_automation/
 
 ## 4. 53개 점검 난이도(Tier) 분류 현황
 
-모든 점검의 메타데이터와 분류 근거는 [`checks/catalog.yaml`](checks/catalog.yaml)에 등록되어 있습니다.
+모든 점검의 메타데이터와 분류 근거는 [`tests/security_checks/catalog.yaml`](tests/security_checks/catalog.yaml)에 등록되어 있습니다.
 
 | 난이도 분류 | 개수 | 점검 번호 | 설명 및 구현 우선순위 |
 | :---: | :---: | :--- | :--- |
