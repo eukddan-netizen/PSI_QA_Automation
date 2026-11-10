@@ -171,17 +171,26 @@ class AppController:
             if close_btn:
                 print(f">>> [AppController] 우상단 닫기 버튼(X) 클릭: {close_btn.rectangle()}")
                 _click_elem(close_btn)
-                time.sleep(0.6)
+                time.sleep(0.5)
 
-            # 3. 종료 확인 팝업("종료하시겠습니까?") 감지 시 '종료' 버튼 클릭
+            # 3. 우상단 X 클릭 후 창 상태 확인
+            # - 안전 기준 점수 이상: 팝업 없이 창이 바로 닫힘
+            # - 안전 기준 점수 미만: "종료하시겠습니까?" 팝업 노출 -> '종료' 버튼 클릭 필요
+            if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
+                print(">>> [AppController] 안전 기준 점수 충족 상태: 팝업 없이 즉시 종료 완료!")
+                return True
+
+            # 창이 아직 열려 있다면 확인 팝업 감지 시 '종료' 버튼 클릭
             for _ in range(5):
+                if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
+                    break
                 exit_btn = None
                 for b in win.descendants(control_type="Button"):
                     if b.element_info.name == "종료":
                         exit_btn = b
                         break
                 if exit_btn:
-                    print(f">>> [AppController] 종료 확인 팝업 '종료' 버튼 클릭: {exit_btn.rectangle()}")
+                    print(f">>> [AppController] 안전 기준 점수 미만 팝업 감지 -> '종료' 버튼 클릭: {exit_btn.rectangle()}")
                     _click_elem(exit_btn)
                     time.sleep(0.5)
                     break
