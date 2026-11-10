@@ -36,7 +36,6 @@ if ($Target -eq "tier_a") {
     exit $LASTEXITCODE
 }
 
-# 숫자인 경우 2자리 checkNN 마커로 변환
 if ($Target -match "^\d+$") {
     $Num = [int]$Target
     $Marker = "check{0:D2}" -f $Num
@@ -45,7 +44,5 @@ if ($Target -match "^\d+$") {
     exit $LASTEXITCODE
 }
 
-# 기타 문자열은 마커 그대로 전달
 & $VenvPytest -m $Target -s
 exit $LASTEXITCODE
-

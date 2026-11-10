@@ -35,9 +35,7 @@ def get_settings() -> Dict[str, Optional[str]]:
 def set_vulnerable(
     guard: StateGuard, timeout_minutes: int = 15, lock_on_resume: bool = False
 ) -> None:
-    """
-    원래 레지스트리 값을 백업(StateGuard)한 뒤 화면보호기를 취약 상태(15분, 암호 잠금 해제)로 변경합니다.
-    """
+    """원래 레지스트리 값을 백업(StateGuard)한 뒤 지정된 화면보호기 상태로 변경합니다."""
     timeout_sec = timeout_minutes * 60
     secure_val = "1" if lock_on_resume else "0"
 
@@ -52,6 +50,23 @@ def set_vulnerable(
     _notify_win_ini_change(timeout_sec, 1)
 
 
+# --- 시나리오별 직관적인 단축 헬퍼 함수 ---
+
+def set_timeout_vulnerable(guard: StateGuard, minutes: int = 15) -> None:
+    """[시나리오 02] 대기 시간만 초과(기본 15분), 잠금 화면은 정상 체크('1') 주입"""
+    set_vulnerable(guard, timeout_minutes=minutes, lock_on_resume=True)
+
+
+def set_lock_vulnerable(guard: StateGuard) -> None:
+    """[시나리오 03] 대기 시간은 10분 정상, 다시 시작할 때 로그온 화면 표시만 해제('0') 주입"""
+    set_vulnerable(guard, timeout_minutes=10, lock_on_resume=False)
+
+
+def set_both_vulnerable(guard: StateGuard) -> None:
+    """[시나리오 04] 대기 시간 초과(15분) + 로그온 화면 표시 해제('0') 동시 취약 주입"""
+    set_vulnerable(guard, timeout_minutes=15, lock_on_resume=False)
+
+
 def set_secure(guard: StateGuard, timeout_minutes: int = 10) -> None:
     """원래 레지스트리 값을 백업한 뒤 화면보호기를 안전 상태(10분 이하, 로그온 화면 표시 체크)로 변경합니다."""
     timeout_sec = timeout_minutes * 60
@@ -62,9 +77,7 @@ def set_secure(guard: StateGuard, timeout_minutes: int = 10) -> None:
 
 
 def is_secure() -> Tuple[bool, str]:
-    """
-    현재 화면보호기 설정이 보안 기준(활성화 + 대기시간 10분 이하 + 로그온 화면 표시 체크)을 충족하는지 판정
-    """
+    """현재 화면보호기 설정이 보안 기준(활성화 + 대기시간 10분 이하 + 로그온 화면 표시 체크)을 충족하는지 판정"""
     s = get_settings()
     active = s.get("ScreenSaveActive") == "1"
     secure = s.get("ScreenSaverIsSecure") == "1"
@@ -79,4 +92,3 @@ def is_secure() -> Tuple[bool, str]:
         False,
         f"취약 (활성: {active}, 대기시간: {timeout // 60}분, 로그온 화면 표시: {secure})",
     )
-

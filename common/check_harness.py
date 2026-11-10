@@ -21,16 +21,20 @@ def run_standard_vulnerable_to_safe_flow(
     handler: Any,
     state_guard: StateGuard,
     wait_seconds: int = 12,
+    inject_fn: Any = None,
 ) -> None:
     """
     단일 클릭 조치가 가능한 점검(Tier A 등)의 표준 E2E 검증 흐름을 수행합니다.
-    각 점검의 test_check_NN.py는 이 함수를 호출하고 handler만 전달하면 됩니다.
+    inject_fn이 지정되면 기본 set_vulnerable 대신 해당 주입 함수를 실행합니다.
     """
     print(f"\n========== [{check_num:02d}번 점검 ({item_keyword}) E2E 테스트 시작] ==========")
 
     # 1) 준비: 원래 설정값 백업 -> 취약 상태로 변경
     print(f">>> [1단계: 준비] 원래 OS 설정 백업 및 '{item_keyword}' 취약 상태 주입")
-    handler.set_vulnerable(state_guard)
+    if inject_fn is not None:
+        inject_fn(state_guard)
+    else:
+        handler.set_vulnerable(state_guard)
     is_safe_before, os_desc_before = handler.is_secure()
     print(f">>> [OS 상태 확인] 안전여부={is_safe_before}, 상세={os_desc_before}")
     assert not is_safe_before, f"취약 상태 주입 실패: OS가 여전히 안전 상태입니다 ({os_desc_before})"
