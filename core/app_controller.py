@@ -119,11 +119,81 @@ class AppController:
             time.sleep(0.5)
         return None
 
-    def close(self):
-        """창 닫기 및 프로세스 종료"""
-        if self.hwnd and win32gui.IsWindow(self.hwnd):
-            try:
-                win32gui.PostMessage(self.hwnd, win32con.WM_CLOSE, 0, 0)
-            except Exception:
-                pass
-        self.kill_existing()
+    def close(self, timeout: float = 5.0) -> bool:
+        """
+        보안점검 창의 우상단 닫기(X) 버튼을 클릭하고,
+        '종료하시겠습니까?' 확인 팝업이 노출되면 '종료' 버튼까지 클릭하여 안전하게 창을 닫습니다.
+        """
+        if not self.hwnd or not win32gui.IsWindow(self.hwnd):
+            return True
+
+        # 1. 대상 크롬 임베디드 웹뷰 핸들 탐색
+        target_h = None
+        def cb(ch, _):
+            nonlocal target_h
+            if "Chrome_WidgetWin_1" in win32gui.GetClassName(ch):
+                target_h = ch
+        win32gui.EnumChildWindows(self.hwnd, cb, None)
+        target_h = target_h or self.hwnd
+
+        try:
+            app = Application(backend="uia").connect(handle=target_h)
+            win = app.window(handle=target_h)
+
+            def _click_elem(elem):
+                r_rect = win32gui.GetWindowRect(target_h)
+                rect = elem.rectangle()
+                local_x = (rect.left + rect.right) // 2 - r_rect[0]
+                local_y = (rect.top + rect.bottom) // 2 - r_rect[1]
+                lParam = (local_y << 16) | (local_x & 0xFFFF)
+                win32gui.PostMessage(target_h, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lParam)
+                time.sleep(0.08)
+                win32gui.PostMessage(target_h, win32con.WM_LBUTTONUP, 0, lParam)
+
+            # 2. 우상단 닫기(X) 버튼 탐색 및 클릭 (상단바 영역에서 가장 우측에 위치한 버튼)
+            start_time = time.time()
+            close_btn = None
+            while time.time() - start_time < timeout:
+                win_rect = win.rectangle()
+                top_bar_bottom = win_rect.top + 70
+
+                candidate_btns = []
+                for b in win.descendants(control_type="Button"):
+                    r = b.rectangle()
+                    if r.top < top_bar_bottom and r.right > win_rect.right - 150:
+                        candidate_btns.append(b)
+
+                if candidate_btns:
+                    close_btn = max(candidate_btns, key=lambda btn: btn.rectangle().right)
+                    break
+                time.sleep(0.4)
+
+            if close_btn:
+                print(f">>> [AppController] 우상단 닫기 버튼(X) 클릭: {close_btn.rectangle()}")
+                _click_elem(close_btn)
+                time.sleep(0.6)
+
+            # 3. 종료 확인 팝업("종료하시겠습니까?") 감지 시 '종료' 버튼 클릭
+            for _ in range(5):
+                exit_btn = None
+                for b in win.descendants(control_type="Button"):
+                    if b.element_info.name == "종료":
+                        exit_btn = b
+                        break
+                if exit_btn:
+                    print(f">>> [AppController] 종료 확인 팝업 '종료' 버튼 클릭: {exit_btn.rectangle()}")
+                    _click_elem(exit_btn)
+                    time.sleep(0.5)
+                    break
+                time.sleep(0.3)
+        except Exception as e:
+            print(f">>> [AppController] 닫기 버튼 상호작용 중 예외 발생: {e}")
+
+        # 4. 창 종료 여부 확인 대기
+        for _ in range(10):
+            if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
+                print(">>> [AppController] 보안점검 창 정상 종료 확인 완료!")
+                return True
+            time.sleep(0.3)
+
+        return not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd))
