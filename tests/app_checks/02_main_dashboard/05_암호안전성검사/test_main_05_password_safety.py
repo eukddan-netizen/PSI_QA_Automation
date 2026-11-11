@@ -19,8 +19,8 @@ import time
 import pytest
 
 from core.app_controller import AppController
-from pages.main_page import MainPage
-from pages.password_safety_modal_page import (
+from pages.client.main_page import MainPage
+from pages.client.modals.password_safety_modal_page import (
     PasswordSafetyModalPage,
     PASSWORD_CRITERIA_NAMES,
 )

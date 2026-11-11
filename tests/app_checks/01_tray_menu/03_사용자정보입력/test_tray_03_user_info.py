@@ -16,7 +16,7 @@ import pytest
 from common.os_utils import require_admin
 
 from core.app_controller import AppController
-from pages.user_info_form_page import UserInfoFormPage
+from pages.client.tray.user_info_form_page import UserInfoFormPage
 
 
 VALID_EMP_NO = "0014"

@@ -13,7 +13,7 @@
 import time
 import pytest
 
-from pages.main_page import MainPage
+from pages.client.main_page import MainPage
 
 
 NEW_CONTACT_NAME = "QA팀"

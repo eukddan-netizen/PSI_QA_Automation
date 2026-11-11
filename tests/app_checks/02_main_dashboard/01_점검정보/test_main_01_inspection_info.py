@@ -10,8 +10,8 @@
 import time
 import pytest
 
-from pages.inspection_result_page import InspectionResultPage
-from pages.main_page import MainPage
+from pages.client.inspection_result_page import InspectionResultPage
+from pages.client.main_page import MainPage
 
 
 POLICY_NAME = "t1"

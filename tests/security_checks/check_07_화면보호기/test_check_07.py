@@ -6,8 +6,8 @@ import pytest
 from common.os_utils import load_check_handler
 from common.check_harness import run_standard_vulnerable_to_safe_flow
 from core.app_controller import AppController
-from pages.main_page import MainPage
-from pages.inspection_result_page import InspectionResultPage
+from pages.client.main_page import MainPage
+from pages.client.inspection_result_page import InspectionResultPage
 
 handler = load_check_handler(__file__)
 

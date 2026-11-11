@@ -129,9 +129,23 @@ d:\psi_automation/
 │  ├─ os_utils.py               # 레지스트리/명령어 제어, StateGuard 원복 가드, 동적 핸들러 로더
 │  └─ check_harness.py          # 5단계 표준 점검 테스트 흐름 공통 실행기
 │
-├─ pages/                       # CefSharp 크롬 웹뷰 UI Automation Page Object
-│  ├─ main_page.py              # 메인 화면 전환, '▶ 점검 시작' 클릭 및 진행 대기
-│  └─ inspection_result_page.py # 점검번호/키워드 행 탐색, 조치 클릭, 취약 카운트/점수 가감 검증
+├─ pages/                       # Page Object 디렉터리 (Server 웹 콘솔 & Client 데스크톱 분리)
+│  ├─ server/                   # 🌐 관리 서버 웹 콘솔 (Playwright 기반, https://192.168.4.151)
+│  │  ├─ base_page.py           # 공통 로그인, URL 및 IP 검색 Base Page
+│  │  ├─ manage_config_page.py  # 환경설정 (/manageConfig) Page Object
+│  │  ├─ patch_page.py          # 패치 관리 (/patch) Page Object
+│  │  ├─ pcsafe_manage_page.py  # 보안점검 항목 관리 (/pcsafeManage) Page Object
+│  │  └─ pcsafe_page.py         # PC보안점검 관리 (/pcsafe) Page Object
+│  │
+│  └─ client/                   # 💻 내PC보안점검 데스크톱 앱 (CefSharp 크롬 웹뷰 UI Automation)
+│     ├─ main_page.py           # 메인 대시보드 화면 전환, 점검 시작 및 지표/차트 제어
+│     ├─ inspection_result_page.py # 점검 결과 테이블 행 탐색, 조치 클릭, 요약 통계 검증
+│     ├─ modals/                # 메인 화면 호출 모달 팝업
+│     │  ├─ help_modal_page.py  # 도움말 안내 모달 (53개 항목 순회, 다국어, 아코디언)
+│     │  └─ password_safety_modal_page.py # 암호 안전성 검사 모달 (5개 기준, 게이지 바)
+│     └─ tray/                  # 시스템 트레이 아이콘 연동 알림창/웹뷰 (TopAegis.Popper)
+│        ├─ tray_patch_status_page.py # 트레이 > 패치 현황 팝업 테이블 데이터 수집
+│        └─ user_info_form_page.py    # 트레이 > 사용자 정보 입력 웹뷰 폼 제어
 │
 ├─ core/                        # 데스크톱 환경 제어
 │  ├─ app_controller.py         # 백그라운드 프로세스 정리 및 시스템 트레이 더블클릭 무인 실행

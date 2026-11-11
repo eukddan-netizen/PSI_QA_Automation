@@ -9,7 +9,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 from playwright.sync_api import Locator
 
-from pages.admin_base_page import AdminBasePage
+from pages.server.base_page import AdminBasePage
 
 
 class AdminPatchPage(AdminBasePage):

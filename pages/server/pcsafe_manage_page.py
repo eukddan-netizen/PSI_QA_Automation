@@ -10,7 +10,7 @@ import time
 from typing import Any, Dict, Optional, Tuple
 from playwright.sync_api import Locator, Page
 
-from pages.admin_base_page import AdminBasePage
+from pages.server.base_page import AdminBasePage
 
 
 class AdminPcsafeManagePage(AdminBasePage):

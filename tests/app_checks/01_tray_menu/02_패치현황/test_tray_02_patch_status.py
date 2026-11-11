@@ -10,7 +10,7 @@ import time
 import pytest
 
 from common.os_utils import get_current_machine_ips, require_admin
-from pages.tray_patch_status_page import TrayPatchStatusPage
+from pages.client.tray.tray_patch_status_page import TrayPatchStatusPage
 
 
 def _log_tray_patch_data(summary: dict, installed_list: list) -> None:

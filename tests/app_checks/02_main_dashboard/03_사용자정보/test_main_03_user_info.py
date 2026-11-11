@@ -12,7 +12,7 @@ from datetime import datetime
 import pytest
 
 from common.os_utils import get_current_machine_ips
-from pages.main_page import MainPage
+from pages.client.main_page import MainPage
 
 
 @pytest.mark.app_check

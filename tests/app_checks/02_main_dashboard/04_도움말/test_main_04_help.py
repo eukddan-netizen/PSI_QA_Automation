@@ -16,8 +16,8 @@ import time
 import pytest
 
 from core.app_controller import AppController
-from pages.main_page import MainPage
-from pages.help_modal_page import (
+from pages.client.main_page import MainPage
+from pages.client.modals.help_modal_page import (
     HelpModalPage,
     HELP_ITEMS_53_KO,
     HELP_ITEMS_53_EN,

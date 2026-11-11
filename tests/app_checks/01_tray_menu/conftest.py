@@ -11,8 +11,8 @@ from playwright.sync_api import sync_playwright
 
 from core.app_controller import AppController
 from core.desktop_utils import launch_visible_chrome
-from pages.admin_patch_page import AdminPatchPage
-from pages.admin_pcsafe_page import AdminPcsafePage
+from pages.server.patch_page import AdminPatchPage
+from pages.server.pcsafe_page import AdminPcsafePage
 
 
 @pytest.fixture(scope="module")

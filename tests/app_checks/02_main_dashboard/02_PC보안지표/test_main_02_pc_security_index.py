@@ -36,8 +36,8 @@
 import time
 import pytest
 
-from pages.main_page import MainPage
-from pages.inspection_result_page import InspectionResultPage
+from pages.client.main_page import MainPage
+from pages.client.inspection_result_page import InspectionResultPage
 
 
 # 5대 보안지표별 세부 점검 항목 키워드 매핑

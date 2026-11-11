@@ -19,7 +19,7 @@ import time
 import pytest
 
 from core.app_controller import AppController
-from pages.main_page import MainPage
+from pages.client.main_page import MainPage
 
 
 @pytest.fixture(scope="module")

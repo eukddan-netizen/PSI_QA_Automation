@@ -10,8 +10,8 @@
 import time
 from typing import Any
 from core.app_controller import AppController
-from pages.main_page import MainPage
-from pages.inspection_result_page import InspectionResultPage
+from pages.client.main_page import MainPage
+from pages.client.inspection_result_page import InspectionResultPage
 from common.os_utils import StateGuard
 
 
