@@ -2,12 +2,14 @@
 PSI 관리자 웹 콘솔 (https://192.168.4.151) 공통 Playwright Base Page Object
 """
 
+import re
 import time
-from playwright.sync_api import Page
+from typing import List, Optional, Tuple
+from playwright.sync_api import Locator, Page
 
 
 class AdminBasePage:
-    """PSI 웹 관리자 콘솔 공통 로그인 및 기본 URL 관리"""
+    """PSI 웹 관리자 콘솔 공통 로그인, URL 및 IP 기반 사용자 검색 관리"""
 
     BASE_URL = "https://192.168.4.151"
     LOGIN_URL = f"{BASE_URL}/"
@@ -28,4 +30,48 @@ class AdminBasePage:
         print(">>> [관리자 웹] [로그인] 버튼 클릭...")
         self.page.locator("button:has-text('로그인')").click()
         self.page.wait_for_timeout(2500)
+
+    def find_user_row_by_ip(self, ip: str, table_header_text: str = "접속/단말 IP") -> Optional[Locator]:
+        """사용자 테이블에서 정확한 IP 토큰을 포함하는 행 반환"""
+        table = self.page.locator("table", has_text=table_header_text).first
+        rows = table.locator("tbody tr")
+        ip_pattern = re.compile(rf"(?<![0-9.]){re.escape(ip)}(?![0-9.])")
+
+        for i in range(rows.count()):
+            row = rows.nth(i)
+            if row.locator("td").count() < 5:
+                continue
+            if ip_pattern.search(row.inner_text()):
+                return row
+        return None
+
+    def search_user_by_ip(
+        self,
+        ip_candidates: List[str],
+        table_header_text: str = "접속/단말 IP",
+    ) -> Tuple[str, Locator]:
+        """
+        후보 IP 목록을 순차 검색하여 사용자 테이블에서 현재 PC 행을 찾습니다.
+        반환값: (매칭된 IP 문자열, 해당 테이블 행 Locator)
+        """
+        if not ip_candidates:
+            raise ValueError("검색할 로컬 IPv4 주소 후보가 없습니다.")
+
+        search_input = self.page.locator("input[placeholder='검색어 입력']")
+        search_btn = self.page.locator("button:text-is('검색')").first
+
+        for ip in ip_candidates:
+            print(f">>> [관리자 웹] 사용자 IP 검색 시도: {ip}")
+            search_input.fill(ip)
+            search_btn.click()
+            self.page.wait_for_timeout(1500)
+
+            row = self.find_user_row_by_ip(ip, table_header_text=table_header_text)
+            if row is not None:
+                print(f">>> [관리자 웹] 사용자 행 탐색 성공 (IP: {ip})")
+                return ip, row
+
+        raise AssertionError(
+            f"관리자 웹({self.page.url})에서 현재 PC IP({ip_candidates})에 해당하는 사용자를 찾을 수 없습니다."
+        )
 

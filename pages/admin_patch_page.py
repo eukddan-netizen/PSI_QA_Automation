@@ -23,49 +23,6 @@ class AdminPatchPage(AdminBasePage):
         self.page.locator("input[placeholder='검색어 입력']").wait_for(state="visible", timeout=10000)
         self.page.wait_for_timeout(1000)
 
-    def _find_user_row_by_ip(self, ip: str) -> Optional[Locator]:
-        """사용자 패치 테이블에서 정확한 IP 토큰을 포함하는 행 반환"""
-        table = self.page.locator("table", has_text="패치 정보").first
-        rows = table.locator("tbody tr")
-        ip_pattern = re.compile(rf"(?<![0-9.]){re.escape(ip)}(?![0-9.])")
-
-        for i in range(rows.count()):
-            row = rows.nth(i)
-            cells = row.locator("td")
-            if cells.count() < 17:
-                continue
-            # '접속/단말 IP' 셀 또는 행 내 정확한 IP 일치 확인
-            row_text = row.inner_text()
-            if ip_pattern.search(row_text):
-                return row
-        return None
-
-    def search_user_by_ip(self, ip_candidates: List[str]) -> Tuple[str, Locator]:
-        """
-        후보 IP 목록을 순차 검색하여 /patch 사용자 테이블에서 현재 PC 행을 찾습니다.
-        반환값: (매칭된 IP 문자열, 해당 테이블 행 Locator)
-        """
-        if not ip_candidates:
-            raise ValueError("검색할 로컬 IPv4 주소 후보가 없습니다.")
-
-        search_input = self.page.locator("input[placeholder='검색어 입력']")
-        search_btn = self.page.locator("button:text-is('검색')").first
-
-        for ip in ip_candidates:
-            print(f">>> [관리자 웹] 사용자 IP 검색 시도: {ip}")
-            search_input.fill(ip)
-            search_btn.click()
-            self.page.wait_for_timeout(1500)
-
-            row = self._find_user_row_by_ip(ip)
-            if row is not None:
-                print(f">>> [관리자 웹] 사용자 행 탐색 성공 (IP: {ip})")
-                return ip, row
-
-        raise AssertionError(
-            f"관리자 웹(/patch)에서 현재 PC IP({ip_candidates})에 해당하는 사용자를 찾을 수 없습니다."
-        )
-
     def _get_recommended_button(self, row: Locator) -> Locator:
         """사용자 행의 '패치 정보' 컬럼에서 '권고' 개수 버튼 Locator 반환 ('미권고' 제외)"""
         return row.locator("div", has_text=re.compile(r"^권고\s")).locator("button").first

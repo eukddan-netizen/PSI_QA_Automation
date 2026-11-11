@@ -1,6 +1,7 @@
 """
 [대분류: 트레이 아이콘] 공통 Fixture
-- admin_page: 사용자 모니터에 크롬 새 창을 띄워 PSI 관리자 콘솔(/pcsafe, t1 부서)을 제어합니다.
+- admin_page: 사용자 모니터에 크롬 새 창을 띄워 PSI 관리자 콘솔(/pcsafe, 현재 PC IP 검색)을 제어합니다.
+- patch_admin_page: 사용자 모니터에 크롬 새 창을 띄워 PSI 관리자 콘솔 패치 관리(/patch)를 제어합니다.
 - app_ctrl: 보안점검 프로그램(taKeeper.exe) 및 인사 UI(TA 공지) 제어기 (종료 시 인사 UI 우선 닫기 적용)
 """
 
@@ -19,8 +20,8 @@ def admin_page():
     """
     Playwright 기반 PSI 웹 관리자 콘솔 제어 Fixture
     - 사용자의 실제 모니터 세션에 크롬 새 창을 띄우고 Playwright CDP로 제어합니다.
-    - /pcsafe 페이지 이동 후 't1' 부서 선택
-    - 모듈 테스트 종료 후 KYC 사용자의 인사 UI 출력을 'OFF'로 안전 원복
+    - /pcsafe 페이지 이동 후 현재 PC의 IP(ipconfig)로 사용자 검색
+    - 모듈 테스트 종료 후 현재 PC 사용자의 인사 UI 출력을 'OFF'로 안전 원복
     """
     proc = launch_visible_chrome(port=9222)
     with sync_playwright() as p:
@@ -33,13 +34,13 @@ def admin_page():
         time.sleep(1)
         admin.goto_pcsafe()
         time.sleep(1)
-        admin.select_department("t1")
+        admin.search_current_user_by_ip()
         time.sleep(1)
         yield admin
 
         # Teardown: 기본 상태(OFF)로 안전 원복 후 브라우저 닫기
         try:
-            admin.set_hr_ui_status("KYC", "OFF")
+            admin.set_hr_ui_status(target_state="OFF")
             time.sleep(1)
         except Exception as e:
             print(f">>> Teardown 원복 중 예외: {e}")

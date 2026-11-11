@@ -36,11 +36,11 @@ def test_row09_duplicate_launch_prevention(app_ctrl):
 def test_row10_hr_ui_off_launch(admin_page, app_ctrl):
     """
     [Row 10: 1_0002]
-    - 조건: 웹 관리자에서 KYC 사용자의 '인사 UI 출력'이 OFF인 상태
+    - 조건: 웹 관리자(/pcsafe)에서 현재 PC IP 사용자의 '인사 UI 출력'이 OFF인 상태
     - 액션: 트레이 아이콘 > 내PC보안점검 클릭
     - 기대 결과: 프로그램 창 정상 노출 확인
     """
-    admin_page.set_hr_ui_status(username="KYC", target_state="OFF")
+    admin_page.set_hr_ui_status(target_state="OFF")
     time.sleep(2)
 
     win = app_ctrl.launch(timeout=15)
@@ -54,11 +54,11 @@ def test_row10_hr_ui_off_launch(admin_page, app_ctrl):
 def test_row11_hr_ui_on_launch(admin_page, app_ctrl):
     """
     [Row 11: 1_0003]
-    - 조건: 웹 관리자에서 KYC 사용자의 '인사 UI 출력'이 ON인 상태
+    - 조건: 웹 관리자(/pcsafe)에서 현재 PC IP 사용자의 '인사 UI 출력'이 ON인 상태
     - 액션: 트레이 아이콘 > 내PC보안점검 클릭
     - 기대 결과: 보안점검 메인 화면 및 인사 연동 다이얼로그(TA 공지) 노출 확인
     """
-    admin_page.set_hr_ui_status(username="KYC", target_state="ON")
+    admin_page.set_hr_ui_status(target_state="ON")
     time.sleep(3)
 
     win = app_ctrl.launch(timeout=15)
