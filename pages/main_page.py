@@ -507,4 +507,102 @@ class MainPage:
                 return
         raise RuntimeError("메인 화면에서 '암호 안전성 검사' 카드를 찾을 수 없습니다.")
 
+    def get_past_history_bars(self) -> List[Any]:
+        """
+        메인 화면 우하단 '지난 검사내역' 차트의 6개 막대(bar) UIA 요소 반환
+        - x좌표 오름차순 정렬 (좌측 -> 우측 = 과거 -> 최신)
+        """
+        _, win = self._connect_window()
+        bars = []
+        for d in win.descendants():
+            cls = d.element_info.class_name or ""
+            if cls == "bar":
+                bars.append(d)
+        return sorted(bars, key=lambda b: b.rectangle().left)
+
+    def hover_and_get_past_history_score(self, bar_index: int, timeout: float = 3.0) -> Optional[int]:
+        """
+        '지난 검사내역' 지정 막대(0~5, 5가 가장 최신)로 마우스 커서를 호버하고 표시되는 점수(int) 반환
+        """
+        bars = self.get_past_history_bars()
+        if not bars:
+            raise RuntimeError("메인 화면에서 '지난 검사내역' 막대 그래프 요소를 찾을 수 없습니다.")
+        if not (0 <= bar_index < len(bars)):
+            raise IndexError(f"막대 인덱스 범위 초과 (0~{len(bars)-1}): {bar_index}")
+
+        target_bar = bars[bar_index]
+        rect = target_bar.rectangle()
+        cx = (rect.left + rect.right) // 2
+        cy = (rect.top + rect.bottom) // 2
+
+        self.bring_to_front()
+        user32 = ctypes.windll.user32
+        user32.SetCursorPos(cx, cy)
+        time.sleep(0.3)
+
+        start = time.time()
+        while time.time() - start < timeout:
+            _, win = self._connect_window()
+            for d in win.descendants(control_type="Text"):
+                dr = d.rectangle()
+                name = (d.element_info.name or "").strip()
+                # 막대 상단 근처에 표시되는 숫자 점수 텍스트
+                if abs(dr.left - cx) < 35 and abs(dr.top - rect.top) < 35 and name.isdigit():
+                    return int(name)
+            time.sleep(0.2)
+        return None
+
+    def click_past_history_bar(self, bar_index: int) -> None:
+        """'지난 검사내역' 지정 막대 클릭하여 '점검이력' 상세 페이지로 이동"""
+        bars = self.get_past_history_bars()
+        if not bars:
+            raise RuntimeError("메인 화면에서 '지난 검사내역' 막대 그래프 요소를 찾을 수 없습니다.")
+        if not (0 <= bar_index < len(bars)):
+            raise IndexError(f"막대 인덱스 범위 초과: {bar_index}")
+
+        target_bar = bars[bar_index]
+        target_h, _ = self._connect_window()
+        print(f">>> [MainPage] 지난 검사내역 {bar_index+1}번째 막대 클릭: {target_bar.rectangle()}")
+        self._click_element(target_bar, target_h)
+        time.sleep(1.5)
+
+    def get_history_detail_info(self) -> Dict[str, Any]:
+        """
+        점검 상세 내역 화면에서 점검일시, 점수 파싱하여 반환
+        """
+        _, win = self._connect_window()
+        info: Dict[str, Any] = {}
+        for d in win.descendants(control_type="DataItem"):
+            name = (d.element_info.name or "").strip()
+            if name.endswith("점") and name[:-1].isdigit():
+                info["score"] = int(name[:-1])
+            elif re.match(r"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$", name):
+                info["inspection_time"] = name
+        return info
+
+    def get_history_tab_records(self, limit: int = 6) -> List[Dict[str, Any]]:
+        """
+        '점검이력' 목록 화면에서 상위 N건의 점검 이력 레코드 반환
+        """
+        _, win = self._connect_window()
+        items = [
+            (d.element_info.name or "").strip()
+            for d in win.descendants(control_type="DataItem")
+            if d.element_info.name
+        ]
+        # 헤더 건너뛰고 레코드 파싱 (번호, 점검 일시, 결과 점수, 안전, 취약, 점검불가, 미점검 7열 구성)
+        records = []
+        for i, text in enumerate(items):
+            if re.match(r"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$", text):
+                score_str = items[i + 1] if i + 1 < len(items) else ""
+                score = int(score_str.replace("점", "")) if "점" in score_str and score_str.replace("점", "").isdigit() else None
+                records.append({
+                    "inspection_time": text,
+                    "score": score,
+                })
+                if len(records) >= limit:
+                    break
+        return records
+
+
 
