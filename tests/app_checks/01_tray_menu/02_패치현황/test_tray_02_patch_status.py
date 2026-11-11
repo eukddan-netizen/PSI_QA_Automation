@@ -13,6 +13,39 @@ from common.os_utils import get_current_machine_ips, require_admin
 from pages.tray_patch_status_page import TrayPatchStatusPage
 
 
+def _log_tray_patch_data(summary: dict, installed_list: list) -> None:
+    """트레이 '패치 현황'에서 수집한 권고패치 현황 및 설치 패치 목록을 터미널에 출력"""
+    print("\n================ [트레이 아이콘 수집: 권고패치 현황] ================", flush=True)
+    for cat, stats in summary.items():
+        print(
+            f"  - {cat:<12} | 전체: {stats['total']:>2}개 | 설치: {stats['installed']:>2}개 | 패치율: {stats['rate_text']}",
+            flush=True,
+        )
+    print(f"================ [트레이 아이콘 수집: 설치 패치 목록 ({len(installed_list)}건)] ================", flush=True)
+    for idx, item in enumerate(installed_list, start=1):
+        print(f"  [{idx:>2}] {item['type']:<10} | {item['name']} | 발표일: {item['release_date']}", flush=True)
+
+
+def _log_web_patch_data(matched_ip: str, web_installed_count: int, web_total_count: int, web_patches: list) -> None:
+    """웹 관리자(/patch, /patch/client)에서 수집한 권고 패치 정보를 터미널에 출력"""
+    cat_total = Counter(p["type"] for p in web_patches)
+    cat_installed = Counter(p["type"] for p in web_patches if p["installed"])
+    print(
+        f"\n================ [서버 수집({matched_ip}): 유형별 권고 패치 집계 ({web_installed_count}/{web_total_count}개)] ================",
+        flush=True,
+    )
+    for cat in sorted(cat_total.keys()):
+        print(f"  - {cat:<12} | 전체: {cat_total[cat]:>2}개 | 설치: {cat_installed.get(cat, 0):>2}개", flush=True)
+    print(f"================ [서버 수집: 권고 패치 상세 목록 ({len(web_patches)}건)] ================", flush=True)
+    for idx, p in enumerate(web_patches, start=1):
+        status_one_line = p["status"].replace("\n", " ")
+        rel = p["release_date"] or "-"
+        print(
+            f"  [{idx:>2}] {p['type']:<10} | {p['name']} | 상태: {status_one_line} | 발표일: {rel}",
+            flush=True,
+        )
+
+
 def _assert_rate_consistent(label: str, total: int, installed: int, rate_value: int) -> None:
     """패치율(%) 수치 일관성 검증"""
     if total == 0:
@@ -58,11 +91,7 @@ def test_patch_status_matches_admin_web(patch_admin_page, app_ctrl):
 
     assert "총계" in tray_summary, f"권고패치 현황에 '총계' 행이 없습니다: {list(tray_summary.keys())}"
     tray_total_row = tray_summary["총계"]
-    print(
-        f"\n>>> [2_0001] 트레이 패치 현황 수집 완료: "
-        f"총계 {tray_total_row['installed']}/{tray_total_row['total']}개 ({tray_total_row['rate_text']}), "
-        f"설치 목록 {len(tray_installed_list)}건"
-    )
+    _log_tray_patch_data(tray_summary, tray_installed_list)
 
     # 트레이 내부 합계 정합성 검증
     categories = {k: v for k, v in tray_summary.items() if k != "총계"}
@@ -94,7 +123,7 @@ def test_patch_status_matches_admin_web(patch_admin_page, app_ctrl):
     # 3. '권고' 개수 클릭 -> 상세 목록 및 모달 '발표일' 수집
     patch_admin_page.click_user_recommended_count(user_row)
     web_patches = patch_admin_page.collect_recommended_patches()
-    print(f">>> [2_0001] 관리자 웹 상세 권고 패치 수집 완료: 총 {len(web_patches)}건")
+    _log_web_patch_data(matched_ip, web_installed_count, web_total_count, web_patches)
 
     assert len(web_patches) == web_total_count, (
         f"상세 목록 행 수({len(web_patches)})가 사용자 권고 전체 개수({web_total_count})와 다릅니다."
