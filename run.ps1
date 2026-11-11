@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Position=0)]
     $Target,
     [Parameter(Position=1)]
@@ -31,8 +31,8 @@ if ([string]::IsNullOrWhiteSpace($Target)) {
 }
 
 if ($Target -eq "tray") {
-    if (-not $IsElevated -and ($SubTarget -in "3", "4", "6" -or [string]::IsNullOrWhiteSpace($SubTarget) -or $SubTarget -match "[346]")) {
-        Write-Host ">>> [참고] 트레이 우클릭 메뉴(3, 4, 6번)는 상위 보안 프로세스(taAssistant) 제어를 위해 '관리자 권한으로 실행한 PowerShell'이 권장됩니다." -ForegroundColor Yellow
+    if (-not $IsElevated -and ($SubTarget -in "2", "3", "4", "6" -or [string]::IsNullOrWhiteSpace($SubTarget) -or $SubTarget -match "[2346]")) {
+        Write-Host ">>> [참고] 트레이 우클릭 메뉴(2, 3, 4, 6번)는 상위 보안 프로세스(taAssistant) 제어를 위해 '관리자 권한으로 실행한 PowerShell'이 권장됩니다." -ForegroundColor Yellow
     }
     if ([string]::IsNullOrWhiteSpace($SubTarget)) {
         Write-Host "[실행] 트레이 아이콘 대분류 전체(중분류 01~06, Row 9~19) 순차 실행 중..." -ForegroundColor Green

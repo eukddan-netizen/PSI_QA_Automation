@@ -13,6 +13,7 @@
 
 import time
 import pytest
+from common.os_utils import require_admin
 
 from core.app_controller import AppController
 from pages.user_info_form_page import UserInfoFormPage
@@ -25,39 +26,31 @@ INVALID_NAME = "홍길동"
 
 
 @pytest.fixture(scope="module")
-def setup_hr_ui_on(admin_page):
+def user_form():
     """
     모듈 내 사용자 정보 입력 테스트(Row 12~15)를 위해:
-    1. 기존 열린 창을 정리한 뒤
-    2. 관리자 웹에서 KYC의 '인사 UI 출력'을 OFF -> ON으로 전환하고
-    3. 보안점검을 실행해 인사 UI('TA 공지') 웹뷰 창이 화면에 뜨도록 합니다.
-    4. 종료 시 인사 UI를 우선 닫고 보안점검 창을 안전 종료합니다.
+    1. 트레이 아이콘 우클릭 > '사용자 정보 입력'을 직접 클릭하여 웹뷰 창을 열고
+    2. UserInfoFormPage 객체를 제공합니다.
+    3. 모듈 완료 시 열린 사용자 정보 창을 안전하게 닫습니다.
     """
+    require_admin(
+        "보안 에이전트(taAssistant) 트레이 우클릭 메뉴 제어를 위해 "
+        "PowerShell을 '관리자 권한으로 실행(Run as Administrator)'해야 합니다."
+    )
+
     ctrl = AppController()
-    ctrl.close()
-    time.sleep(1)
+    ctrl.close_hr_ui()
+    time.sleep(0.5)
 
-    admin_page.set_hr_ui_status("KYC", "OFF")
+    ctrl.click_tray_menu_item("사용자 정보 입력")
     time.sleep(1.5)
-    admin_page.set_hr_ui_status("KYC", "ON")
-    time.sleep(2)
 
-    ctrl.launch(timeout=15)
-    time.sleep(3)
-
-    yield admin_page
-
-    ctrl.close()
-
-
-@pytest.fixture(scope="module")
-def user_form(setup_hr_ui_on):
-    """화면의 인사 UI('TA 공지') 웹뷰 Page Object를 제공합니다."""
     form = UserInfoFormPage()
-    assert form.is_visible(), "인사 UI 출력 ON 정책 적용 시 화면에 사용자 정보 입력 창이 노출되어야 합니다."
+    assert form.is_visible(), "트레이 아이콘 > '사용자 정보 입력' 클릭 시 화면에 입력 창이 노출되어야 합니다."
     yield form
+
     try:
-        form.close()
+        ctrl.close_hr_ui()
     except Exception:
         pass
 
