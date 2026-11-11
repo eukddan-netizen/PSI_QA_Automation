@@ -37,10 +37,35 @@ app_checks:
 
   - id: app_02
     folder: 02_main_dashboard
-    title: 메인 대시보드 및 상호작용 UI
+    title: 보안점검 메인 탭
     excel_rows: 20~34
     marker: app_main
     description: 좌측 방패/점수 상태, 안전점수 미만 종료 경고, PC보안지표 hover, 도움말/암호안전성 모달
+    subcategories:
+      - id: main_01
+        folder: 01_점검정보
+        title: 점검 정보
+        excel_rows: 20~23
+      - id: main_02
+        folder: 02_PC보안지표
+        title: PC보안지표
+        excel_rows: 24
+      - id: main_03
+        folder: 03_사용자정보
+        title: 사용자 정보
+        excel_rows: 25~26
+      - id: main_04
+        folder: 04_도움말
+        title: 도움말
+        excel_rows: 27~31
+      - id: main_05
+        folder: 05_암호안전성검사
+        title: 암호 안전성 검사
+        excel_rows: 32
+      - id: main_06
+        folder: 06_지난검사내역
+        title: 지난 검사내역
+        excel_rows: 33~34
 
   - id: app_03
     folder: 03_inspection_run
