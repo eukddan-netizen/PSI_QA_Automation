@@ -480,3 +480,17 @@ class MainPage:
                     return True
             time.sleep(0.25)
         return False
+
+    def click_help_card(self) -> None:
+        """메인 대시보드 우측 '도움말 안내' 카드 클릭"""
+        self.bring_to_front()
+        target_h, win = self._connect_window()
+        for d in win.descendants():
+            name = (d.element_info.name or "").strip()
+            if name == "도움말 안내":
+                print(f">>> [MainPage] '도움말 안내' 카드 클릭: {d.rectangle()}")
+                self._click_element(d, target_h)
+                time.sleep(0.5)
+                return
+        raise RuntimeError("메인 화면에서 '도움말 안내' 카드를 찾을 수 없습니다.")
+
