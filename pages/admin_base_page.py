@@ -31,6 +31,13 @@ class AdminBasePage:
         self.page.locator("button:has-text('로그인')").click()
         self.page.wait_for_timeout(2500)
 
+    def bring_to_front(self) -> None:
+        """관리자 웹 브라우저 탭 활성화 (사용자 개인 브라우저는 일절 건드리지 않음)"""
+        try:
+            self.page.bring_to_front()
+        except Exception:
+            pass
+
     def find_user_row_by_ip(self, ip: str, table_header_text: str = "접속/단말 IP") -> Optional[Locator]:
         """사용자 테이블에서 정확한 IP 토큰을 포함하는 행 반환"""
         table = self.page.locator("table", has_text=table_header_text).first

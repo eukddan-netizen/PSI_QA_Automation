@@ -604,5 +604,44 @@ class MainPage:
                     break
         return records
 
+    def get_support_inquiry_text(self) -> str:
+        """
+        메인 대시보드 좌측 하단 '지원&문의' 옆에 표시되는 문의처 텍스트 반환 (예: '전산팀', 'QA팀')
+        """
+        _, win = self._connect_window()
+        texts = [
+            (d.element_info.name or "").strip()
+            for d in win.descendants(control_type="Text")
+            if d.element_info.name
+        ]
+        for idx, text in enumerate(texts):
+            if "지원&문의" in text or "지원 & 문의" in text:
+                if idx + 1 < len(texts):
+                    return texts[idx + 1]
+
+        # 대체 탐색: '지원&문의' 텍스트 요소 기준 우측 인접 텍스트 탐색
+        support_elem = None
+        for d in win.descendants():
+            name = (d.element_info.name or "").strip()
+            if "지원&문의" in name or "지원 & 문의" in name:
+                support_elem = d
+                break
+
+        if support_elem:
+            s_rect = support_elem.rectangle()
+            for d in win.descendants(control_type="Text"):
+                r = d.rectangle()
+                name = (d.element_info.name or "").strip()
+                if (
+                    name
+                    and "지원" not in name
+                    and abs(r.top - s_rect.top) < 30
+                    and r.left >= s_rect.right - 10
+                ):
+                    return name
+
+        raise RuntimeError("메인 대시보드에서 '지원&문의' 안내 문구를 찾을 수 없습니다.")
+
+
 
 

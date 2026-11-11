@@ -12,6 +12,7 @@ from core.app_controller import AppController
 from core.desktop_utils import launch_visible_chrome
 from pages.admin_pcsafe_page import AdminPcsafePage
 from pages.admin_pcsafe_manage_page import AdminPcsafeManagePage
+from pages.admin_manage_config_page import AdminManageConfigPage
 
 
 @pytest.fixture(scope="module")
@@ -81,6 +82,49 @@ def pcsafe_admin_page():
             except Exception:
                 pass
             proc.terminate()
+
+
+@pytest.fixture(scope="module")
+def manage_config_page():
+    """
+    Playwright 기반 PSI 웹 관리자 콘솔 환경설정(/manageConfig) Fixture
+    - 사용자 모니터 세션에 크롬 새 창을 띄우고 Playwright CDP로 제어합니다.
+    - 보안점검 탭의 초기 '문의처' 문구를 백업한 뒤,
+      모듈 테스트 종료 시(실패 포함) 원래 값으로 자동 원복을 보장합니다.
+    """
+    proc = launch_visible_chrome(port=9222)
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
+        context = browser.contexts[0]
+        page = context.pages[0] if context.pages else context.new_page()
+
+        manage_cfg = AdminManageConfigPage(page)
+        manage_cfg.login(username="admin", password="Qwe123!@#")
+        time.sleep(1)
+        manage_cfg.goto_manage_config()
+        manage_cfg.select_tab("보안점검")
+        orig_contact = manage_cfg.get_contact_text()
+        print(f"\n>>> [manage_config_page] 초기 '문의처' 문구 백업: '{orig_contact}'")
+
+        try:
+            yield manage_cfg
+        finally:
+            try:
+                manage_cfg.goto_manage_config()
+                manage_cfg.select_tab("보안점검")
+                current_val = manage_cfg.get_contact_text()
+                if current_val != orig_contact:
+                    print(f"\n>>> [manage_config_page Teardown] 문의처 원복 진행: '{current_val}' -> '{orig_contact}'")
+                    manage_cfg.set_contact_text(orig_contact)
+                    manage_cfg.save_config()
+            except Exception as e:
+                print(f">>> [Teardown] 문의처 원복 중 예외 발생: {e}")
+            finally:
+                try:
+                    browser.close()
+                except Exception:
+                    pass
+                proc.terminate()
 
 
 @pytest.fixture(scope="function")
