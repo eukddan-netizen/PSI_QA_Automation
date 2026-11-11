@@ -122,10 +122,11 @@ def is_admin() -> bool:
         return False
 
 
-def require_admin() -> None:
-    """관리자 권한이 필요한 점검을 비관리자 콘솔에서 실행할 때 안전하게 스킵합니다."""
+def require_admin(reason: Optional[str] = None) -> None:
+    """관리자 권한이 필요한 점검을 비관리자 콘솔에서 실행할 때 명확한 안내와 함께 스킵합니다."""
     if not is_admin():
-        pytest.skip("이 점검의 OS 상태 주입에는 Windows 관리자 권한(Run as Administrator)이 필요합니다.")
+        msg = reason or "이 점검 실행에는 Windows 관리자 권한(Run as Administrator)이 필요합니다."
+        pytest.skip(msg)
 
 
 class StateGuard:
