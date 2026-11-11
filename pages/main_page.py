@@ -494,3 +494,17 @@ class MainPage:
                 return
         raise RuntimeError("메인 화면에서 '도움말 안내' 카드를 찾을 수 없습니다.")
 
+    def click_password_safety_card(self) -> None:
+        """메인 대시보드 우측 '암호 안전성 검사' 카드 클릭"""
+        self.bring_to_front()
+        target_h, win = self._connect_window()
+        for d in win.descendants():
+            name = (d.element_info.name or "").strip()
+            if name == "암호 안전성 검사":
+                print(f">>> [MainPage] '암호 안전성 검사' 카드 클릭: {d.rectangle()}")
+                self._click_element(d, target_h)
+                time.sleep(0.5)
+                return
+        raise RuntimeError("메인 화면에서 '암호 안전성 검사' 카드를 찾을 수 없습니다.")
+
+
