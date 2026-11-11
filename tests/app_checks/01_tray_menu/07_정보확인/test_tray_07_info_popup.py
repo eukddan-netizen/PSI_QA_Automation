@@ -1,17 +1,15 @@
 """
-[대분류: 트레이 아이콘 > 중분류 6: 정보 확인] (Excel Row 19)
+[대분류: 트레이 아이콘 > 중분류 7: 정보 확인]
 
-- Row 19 (6_0001): 트레이 아이콘 > 정보 확인 -> 보유 제품(STR, PRS 등) 관리서버 및 사용자 IP 팝업 출력 확인 후 [확인] 클릭
+- 7_0001: 트레이 아이콘 > 정보 확인 -> 보유 제품(STR, PRS 등) 관리서버 및 사용자 IP 팝업 출력 확인 후 [확인] 클릭
   * 관리서버 IP: TA-STR(58.127.84.36), TA-PRS(192.168.4.151) 고정 서버 IP 검증
   * 사용자 IP: 현재 실행 PC의 ipconfig IPv4 주소와 일치 여부 검증
 """
 
 import re
 import time
-import socket
-import subprocess
 import pytest
-from common.os_utils import require_admin
+from common.os_utils import get_current_machine_ips, require_admin
 
 # 제품별 고정 관리서버 IP 매핑
 EXPECTED_SERVER_IPS = {
@@ -20,33 +18,12 @@ EXPECTED_SERVER_IPS = {
 }
 
 
-def get_current_machine_ips() -> set[str]:
-    """ipconfig 및 socket 라우팅을 통해 현재 실행 중인 PC의 유효 IPv4 주소 목록을 수집합니다."""
-    ips = set()
-    try:
-        out = subprocess.check_output("ipconfig", text=True, errors="replace")
-        found = re.findall(r"IPv4(?:\s*주소|\s*Address)[.\s]*:\s*([0-9.]+)", out)
-        ips.update(found)
-    except Exception:
-        pass
-
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ips.add(s.getsockname()[0])
-        s.close()
-    except Exception:
-        pass
-
-    return ips
-
-
 @pytest.mark.app_check
 @pytest.mark.app_tray
-@pytest.mark.tray_06
+@pytest.mark.tray_07
 def test_row19_info_popup(app_ctrl):
     """
-    [Row 19: 6_0001]
+    [TC: 7_0001]
     - 조건: 정상 동작 (STR, PRS 등 복수 제품 설치 환경 지원)
     - 액션: 트레이 아이콘 > 정보 확인 클릭
     - 기대 결과:
@@ -60,8 +37,8 @@ def test_row19_info_popup(app_ctrl):
         "PowerShell을 '관리자 권한으로 실행(Run as Administrator)'해야 합니다."
     )
 
-    local_machine_ips = get_current_machine_ips()
-    print(f"\n>>> [Row 19] ipconfig 기반 감지된 현재 PC IP 목록: {sorted(local_machine_ips)}")
+    local_machine_ips = set(get_current_machine_ips())
+    print(f"\n>>> [7_0001] ipconfig 기반 감지된 현재 PC IP 목록: {sorted(local_machine_ips)}")
 
     app_ctrl.click_tray_menu_item("정보 확인")
 

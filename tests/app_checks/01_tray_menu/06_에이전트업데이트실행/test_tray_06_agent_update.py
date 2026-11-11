@@ -1,7 +1,7 @@
 """
-[대분류: 트레이 아이콘 > 중분류 5: 에이전트 업데이트 실행] (Excel Row 18)
+[대분류: 트레이 아이콘 > 중분류 6: 에이전트 업데이트 실행]
 
-- Row 18 (5_0001): 트레이 아이콘 > 에이전트 업데이트 실행 -> 무반응 (Excel 결과: B / 비고: 논의 요망)
+- 6_0001: 트레이 아이콘 > 에이전트 업데이트 실행 -> 무반응 (Excel 결과: B / 비고: 논의 요망)
 """
 
 import time
@@ -11,11 +11,11 @@ from common.os_utils import require_admin
 
 @pytest.mark.app_check
 @pytest.mark.app_tray
-@pytest.mark.tray_05
-@pytest.mark.skip(reason="[Excel Row 18 - B/논의 요망] 에이전트 업데이트 실행 기대 결과(무반응) 사양 확인 필요")
+@pytest.mark.tray_06
+@pytest.mark.skip(reason="[6_0001 - B/논의 요망] 에이전트 업데이트 실행 기대 결과(무반응) 사양 확인 필요")
 def test_row18_agent_update(app_ctrl):
     """
-    [Row 18: 5_0001]
+    [TC: 6_0001]
     - 조건: 정상 동작
     - 액션: 트레이 아이콘 > 에이전트 업데이트 실행 클릭
     - 기대 결과: 무반응 (오류 팝업 없이 정상 유지)

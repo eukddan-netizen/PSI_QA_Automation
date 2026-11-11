@@ -1,7 +1,7 @@
 """
-[대분류: 트레이 아이콘 > 중분류 4: 폰트 목록 재확인] (Excel Row 17)
+[대분류: 트레이 아이콘 > 중분류 5: 폰트 목록 재확인]
 
-- Row 17 (4_0001): 트레이 아이콘 > 폰트 목록 재확인 -> "폰트 목록 재검사를 성공적으로 수행하였습니다." 팝업 확인
+- 5_0001: 트레이 아이콘 > 폰트 목록 재확인 -> "폰트 목록 재검사를 성공적으로 수행하였습니다." 팝업 확인
 """
 
 import pytest
@@ -10,10 +10,10 @@ from common.os_utils import require_admin
 
 @pytest.mark.app_check
 @pytest.mark.app_tray
-@pytest.mark.tray_04
+@pytest.mark.tray_05
 def test_row17_font_rescan(app_ctrl):
     """
-    [Row 17: 4_0001]
+    [TC: 5_0001]
     - 조건: 정상 동작
     - 액션: 트레이 아이콘 > 폰트 목록 재확인 클릭
     - 기대 결과: "폰트 목록 재검사를 성공적으로 수행하였습니다." 팝업 출력 확인
@@ -28,7 +28,7 @@ def test_row17_font_rescan(app_ctrl):
     assert dialog is not None, "폰트 목록 재확인 클릭 후 완료 팝업이 출력되어야 합니다."
 
     dlg_hwnd, dlg_text = dialog
-    print(f">>> [Row 17] 팝업 감지: {dlg_text!r}")
+    print(f">>> [5_0001] 팝업 감지: {dlg_text!r}")
     try:
         assert "폰트" in dlg_text and ("재검사" in dlg_text or "수행" in dlg_text), (
             f"폰트 목록 재검사 성공 팝업 문구가 일치하지 않습니다. (실제: {dlg_text})"
