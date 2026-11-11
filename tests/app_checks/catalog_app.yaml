@@ -2,9 +2,8 @@ app_checks:
   - id: app_01
     folder: 01_tray_menu
     title: 트레이 아이콘
-    excel_rows: 9~19
     marker: app_tray
-    description: 트레이 아이콘 대분류 (내PC보안점검, 사용자 정보 입력, 프로그램/폰트 목록 재확인, 업데이트, 정보 확인)
+    description: 트레이 아이콘 대분류 (내PC보안점검, 패치 현황, 사용자 정보 입력, 프로그램/폰트 목록 재확인, 업데이트, 정보 확인)
     subcategories:
       - id: tray_01
         folder: 01_내PC보안점검
@@ -12,30 +11,29 @@ app_checks:
         excel_rows: 9~11
         tc_ids: ["1_0001", "1_0002", "1_0003"]
       - id: tray_02
-        folder: 02_사용자정보입력
-        title: 사용자 정보 입력
-        excel_rows: 12~15
-        tc_ids: ["2_0001", "2_0002", "2_0003", "2_0004"]
+        folder: 02_패치현황
+        title: 패치 현황
+        tc_ids: ["2_0001"]
       - id: tray_03
-        folder: 03_프로그램목록재확인
-        title: 프로그램 목록 재확인
-        excel_rows: 16
-        tc_ids: ["3_0001"]
+        folder: 03_사용자정보입력
+        title: 사용자 정보 입력
+        tc_ids: ["3_0001", "3_0002", "3_0003", "3_0004"]
       - id: tray_04
-        folder: 04_폰트목록재확인
-        title: 폰트 목록 재확인
-        excel_rows: 17
+        folder: 04_프로그램목록재확인
+        title: 프로그램 목록 재확인
         tc_ids: ["4_0001"]
       - id: tray_05
-        folder: 05_에이전트업데이트실행
-        title: 에이전트 업데이트 실행
-        excel_rows: 18
+        folder: 05_폰트목록재확인
+        title: 폰트 목록 재확인
         tc_ids: ["5_0001"]
       - id: tray_06
-        folder: 06_정보확인
-        title: 정보 확인
-        excel_rows: 19
+        folder: 06_에이전트업데이트실행
+        title: 에이전트 업데이트 실행
         tc_ids: ["6_0001"]
+      - id: tray_07
+        folder: 07_정보확인
+        title: 정보 확인
+        tc_ids: ["7_0001"]
 
   - id: app_02
     folder: 02_main_dashboard
