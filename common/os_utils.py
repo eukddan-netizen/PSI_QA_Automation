@@ -8,7 +8,9 @@
 
 import ctypes
 import importlib.util
+import re
 import shutil
+import socket
 import subprocess
 import sys
 import winreg
@@ -239,3 +241,34 @@ def get_check_meta(check_num: int) -> Dict[str, Any]:
     if check_num not in catalog:
         raise KeyError(f"catalog.yaml에 {check_num}번 점검 정보가 없습니다.")
     return catalog[check_num]
+
+
+def get_current_machine_ips(target_host: str = "192.168.4.151", target_port: int = 443) -> List[str]:
+    """
+    현재 PC의 유효 IPv4 주소 목록을 우선순위 순으로 반환합니다.
+    관리서버 라우팅용 기본 아웃바운드 IP를 맨 앞에 두고, ipconfig로 감지된 나머지 IPv4를 뒤에 추가합니다.
+    """
+    ordered_ips: List[str] = []
+
+    def _add(ip: str) -> None:
+        ip = ip.strip()
+        if ip and ip != "127.0.0.1" and ip not in ordered_ips:
+            ordered_ips.append(ip)
+
+    for host, port in ((target_host, target_port), ("8.8.8.8", 80)):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect((host, port))
+                _add(s.getsockname()[0])
+            break
+        except Exception:
+            continue
+
+    try:
+        _, out, _ = run_cmd(["ipconfig"])
+        for ip in re.findall(r"IPv4(?:\s*주소|\s*Address)[.\s]*:\s*(\d{1,3}(?:\.\d{1,3}){3})", out):
+            _add(ip)
+    except Exception:
+        pass
+
+    return ordered_ips

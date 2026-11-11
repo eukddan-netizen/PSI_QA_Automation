@@ -7,30 +7,13 @@ PSI 관리자 웹 콘솔 (https://192.168.4.151) Playwright 제어 Page Object
 
 import time
 from typing import Optional
-from playwright.sync_api import Page, Browser, sync_playwright
+from playwright.sync_api import Page
+
+from pages.admin_base_page import AdminBasePage
 
 
-class AdminPcsafePage:
-    BASE_URL = "https://192.168.4.151"
-    LOGIN_URL = f"{BASE_URL}/"
-    PCDAFE_URL = f"{BASE_URL}/pcsafe"
-
-    def __init__(self, page: Page):
-        self.page = page
-
-    def login(self, username: str = "admin", password: str = "Qwe123!@#") -> None:
-        """관리자 페이지 접속 및 로그인"""
-        print(f"\n>>> [관리자 웹] {self.LOGIN_URL} 접속 중...")
-        self.page.goto(self.LOGIN_URL, timeout=15000)
-        time.sleep(1.5)
-        print(f">>> [관리자 웹] 아이디({username}) 및 비밀번호 입력 중...")
-        self.page.locator("input[type='text']").fill(username)
-        time.sleep(0.5)
-        self.page.locator("input[type='password']").fill(password)
-        time.sleep(1.0)
-        print(">>> [관리자 웹] [로그인] 버튼 클릭...")
-        self.page.locator("button:has-text('로그인')").click()
-        self.page.wait_for_timeout(2500)
+class AdminPcsafePage(AdminBasePage):
+    PCDAFE_URL = f"{AdminBasePage.BASE_URL}/pcsafe"
 
     def goto_pcsafe(self) -> None:
         """PC보안점검 관리(/pcsafe) 페이지로 이동"""
