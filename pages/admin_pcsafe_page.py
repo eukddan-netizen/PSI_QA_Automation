@@ -128,3 +128,53 @@ class AdminPcsafePage(AdminBasePage):
         print(f">>> [관리자 웹] 최종 변경된 상태: {new_state}")
         return new_state
 
+    def refresh_user_search(self, user_ip: Optional[str] = None) -> None:
+        """사용자 검색어를 다시 입력/검색하여 최신 데이터를 반영"""
+        target_ip = user_ip or self.target_ip or self.search_current_user_by_ip()
+        search_input = self.page.locator("input[placeholder='검색어 입력']")
+        search_btn = self.page.locator("button:text-is('검색')").first
+        search_input.fill(target_ip)
+        search_btn.click()
+        self.page.wait_for_timeout(1500)
+
+    def get_user_details(self, user_ip: Optional[str] = None) -> dict:
+        """
+        /pcsafe 사용자 목록 테이블에서 해당 IP 사용자의 행 상세 정보 추출:
+        {
+            'department': 't1',
+            'username': 'KYC',
+            'os': '11 Pro',
+            'bit': '64',
+            'sp': '25H2',
+            'ip': '192.168.2.28',
+            'mac': 'F44EB419E6AF',
+            'score': '89점',
+            'last_inspection_time': '2026-11-11 13:55:15',
+            'status': '접속'
+        }
+        """
+        target_ip, row = self._get_user_row(user_ip=user_ip)
+        table = self.page.locator("table", has_text="접속/단말 IP").first
+        headers = [th.inner_text().strip() for th in table.locator("thead th, thead td").all()]
+        cells = [td.inner_text().strip() for td in row.locator("td").all()]
+
+        def get_val(header_kw: str) -> str:
+            for idx, h in enumerate(headers):
+                if header_kw in h and idx < len(cells):
+                    return cells[idx]
+            return ""
+
+        return {
+            "department": get_val("부서"),
+            "username": get_val("사용자"),
+            "os": get_val("OS"),
+            "bit": get_val("Bit"),
+            "sp": get_val("SP"),
+            "ip": get_val("접속/단말 IP"),
+            "mac": get_val("MAC 주소"),
+            "score": get_val("점검 점수"),
+            "last_inspection_time": get_val("최종 점검일"),
+            "status": get_val("접속 상태"),
+        }
+
+

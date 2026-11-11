@@ -311,6 +311,33 @@ class MainPage:
 
         return {"state": state, "red": red, "blue": blue, "gray": gray, "bbox": bbox}
 
+    def get_user_info(self) -> Dict[str, str]:
+        """
+        메인 화면 우측 상단의 '사용자 정보' 카드 정보를 딕셔너리로 추출:
+        {
+            "os": "Windows 11 Pro 25H2",
+            "department": "t1",
+            "username": "KYC",
+            "ip": "192.168.2.28",
+            "last_inspection_time": "2026-11-11 13:23:04"
+        }
+        """
+        target_h, win = self._connect_window()
+        texts = [(el.element_info.name or "").strip() for el in win.descendants(control_type="Text")]
+        info: Dict[str, str] = {}
+        for i, t in enumerate(texts):
+            if t == "OS 정보" and i + 1 < len(texts):
+                info["os"] = texts[i + 1]
+            elif t == "부서명" and i + 1 < len(texts):
+                info["department"] = texts[i + 1]
+            elif t == "사용자명" and i + 1 < len(texts):
+                info["username"] = texts[i + 1]
+            elif t == "사용자 IP" and i + 1 < len(texts):
+                info["ip"] = texts[i + 1]
+            elif t == "최근점검일시" and i + 1 < len(texts):
+                info["last_inspection_time"] = texts[i + 1]
+        return info
+
     RADAR_SPOKE_ANGLES = {
         "바이러스백신": -90,
         "소프트웨어": -18,

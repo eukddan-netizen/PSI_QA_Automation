@@ -10,6 +10,7 @@ from playwright.sync_api import sync_playwright
 
 from core.app_controller import AppController
 from core.desktop_utils import launch_visible_chrome
+from pages.admin_pcsafe_page import AdminPcsafePage
 from pages.admin_pcsafe_manage_page import AdminPcsafeManagePage
 
 
@@ -50,6 +51,36 @@ def pcsafe_manage_page():
                 except Exception:
                     pass
                 proc.terminate()
+
+
+@pytest.fixture(scope="module")
+def pcsafe_admin_page():
+    """
+    Playwright 기반 PSI 웹 관리자 콘솔 PC보안점검 관리(/pcsafe) Fixture
+    - 현재 PC IP(ipconfig) 기반 사용자 행 검색 및 상세 정보 조회 제공
+    """
+    proc = launch_visible_chrome(port=9222)
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
+        context = browser.contexts[0]
+        page = context.pages[0] if context.pages else context.new_page()
+
+        admin = AdminPcsafePage(page)
+        admin.login(username="admin", password="Qwe123!@#")
+        time.sleep(1)
+        admin.goto_pcsafe()
+        time.sleep(1)
+        admin.search_current_user_by_ip()
+        time.sleep(1)
+
+        try:
+            yield admin
+        finally:
+            try:
+                browser.close()
+            except Exception:
+                pass
+            proc.terminate()
 
 
 @pytest.fixture(scope="function")
