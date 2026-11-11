@@ -1,7 +1,7 @@
 param(
-    [Parameter(Position=0)]
+    [Parameter(Position = 0)]
     $Target,
-    [Parameter(Position=1)]
+    [Parameter(Position = 1)]
     $SubTarget
 )
 

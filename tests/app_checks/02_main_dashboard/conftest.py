@@ -1,10 +1,55 @@
 """
 [대분류: 보안점검 메인 탭] 공통 Fixture
 - app_ctrl: 보안점검 프로그램(taKeeper.exe) 제어기
+- pcsafe_manage_page: PSI 관리자 콘솔 보안점검 항목 관리(/pcsafeManage) 제어 및 정책 원복 보장 Fixture
 """
 
+import time
 import pytest
+from playwright.sync_api import sync_playwright
+
 from core.app_controller import AppController
+from core.desktop_utils import launch_visible_chrome
+from pages.admin_pcsafe_manage_page import AdminPcsafeManagePage
+
+
+@pytest.fixture(scope="module")
+def pcsafe_manage_page():
+    """
+    Playwright 기반 PSI 웹 관리자 콘솔 보안점검 항목 관리(/pcsafeManage) Fixture
+    - 사용자 모니터 세션에 크롬 새 창을 띄우고 Playwright CDP로 제어합니다.
+    - 't1' 정책의 초기 항목 점수(1, 2번) 및 안전 기준 점수를 백업한 뒤,
+      모듈 테스트 종료 시(실패 포함) 원래 값으로 자동 원복합니다.
+    """
+    proc = launch_visible_chrome(port=9222)
+    with sync_playwright() as p:
+        browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
+        context = browser.contexts[0]
+        page = context.pages[0] if context.pages else context.new_page()
+
+        manage = AdminPcsafeManagePage(page)
+        manage.login(username="admin", password="Qwe123!@#")
+        time.sleep(1)
+        manage.goto_pcsafe_manage()
+        manage.select_policy("t1")
+        orig_snapshot = manage.get_policy_snapshot(item_nos=(1, 2))
+        print(f"\n>>> [pcsafe_manage_page] 초기 't1' 정책 스냅샷 백업: {orig_snapshot}")
+
+        try:
+            yield manage
+        finally:
+            try:
+                manage.goto_pcsafe_manage()
+                manage.select_policy("t1")
+                manage.restore_policy_snapshot(orig_snapshot)
+            except Exception as e:
+                print(f">>> [Teardown] 't1' 정책 원복 중 예외: {e}")
+            finally:
+                try:
+                    browser.close()
+                except Exception:
+                    pass
+                proc.terminate()
 
 
 @pytest.fixture(scope="function")
@@ -16,4 +61,3 @@ def app_ctrl():
         ctrl.close()
     except Exception:
         pass
-
