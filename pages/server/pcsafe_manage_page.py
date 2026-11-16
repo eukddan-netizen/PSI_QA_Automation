@@ -23,6 +23,7 @@ class AdminPcsafeManagePage(AdminBasePage):
 
     def goto_pcsafe_manage(self) -> None:
         """보안점검 항목 관리(/pcsafeManage) 페이지로 이동"""
+        self.bring_to_front()
         if "/pcsafeManage" not in self.page.url:
             print(f">>> [관리자 웹] {self.PCSAFE_MANAGE_URL} 이동 중...")
             self.page.goto(self.PCSAFE_MANAGE_URL, timeout=15000)
@@ -198,6 +199,7 @@ class AdminPcsafeManagePage(AdminBasePage):
 
     def save_policy(self) -> None:
         """하단 '수정' 버튼 클릭 및 '정상 처리되었습니다.' 모달 확인"""
+        self.bring_to_front()
         print(">>> [관리자 웹] 하단 [수정] 버튼 클릭...")
         edit_btn = self.page.locator("button:text-is('수정')").first
         edit_btn.scroll_into_view_if_needed()
@@ -211,6 +213,7 @@ class AdminPcsafeManagePage(AdminBasePage):
 
     def apply_policy(self) -> None:
         """좌측 상단 '정책 적용' 버튼 클릭 -> [예] -> [확인] 처리"""
+        self.bring_to_front()
         print(">>> [관리자 웹] 좌측 상단 [정책 적용] 버튼 클릭...")
         apply_btn = self.page.locator("button:text-is('정책 적용')").first
         apply_btn.scroll_into_view_if_needed()

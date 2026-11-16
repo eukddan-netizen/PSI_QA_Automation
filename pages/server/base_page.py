@@ -7,7 +7,7 @@ import time
 from typing import List, Optional, Tuple
 from playwright.sync_api import Locator, Page
 
-from core.desktop_utils import dismiss_chrome_bubbles
+from core.desktop_utils import bring_chrome_to_front, dismiss_chrome_bubbles
 
 
 class AdminBasePage:
@@ -31,6 +31,7 @@ class AdminBasePage:
 
     def login(self, username: str = "admin", password: str = "Qwe123!@#") -> None:
         """관리자 페이지 접속 및 로그인 (브라우저 복구/암호저장 팝업 자동 정리 포함)"""
+        self.bring_to_front()
         print(f"\n>>> [관리자 웹] {self.LOGIN_URL} 접속 중...")
         self.page.goto(self.LOGIN_URL, timeout=15000)
         time.sleep(1.5)
@@ -47,7 +48,13 @@ class AdminBasePage:
         self.dismiss_browser_popups(timeout=1.5)
 
     def bring_to_front(self) -> None:
-        """관리자 웹 브라우저 탭 활성화 (사용자 개인 브라우저는 일절 건드리지 않음)"""
+        """관리자 웹 브라우저 창 및 탭을 최상단으로 활성화 (사용자 개인 브라우저는 건드리지 않음)"""
+        title_hint = ""
+        try:
+            title_hint = self.page.title() or ""
+        except Exception:
+            pass
+        bring_chrome_to_front(title_hint=title_hint)
         try:
             self.page.bring_to_front()
         except Exception:
@@ -79,6 +86,7 @@ class AdminBasePage:
         if not ip_candidates:
             raise ValueError("검색할 로컬 IPv4 주소 후보가 없습니다.")
 
+        self.bring_to_front()
         search_input = self.page.locator("input[placeholder='검색어 입력']")
         search_btn = self.page.locator("button:text-is('검색')").first
 

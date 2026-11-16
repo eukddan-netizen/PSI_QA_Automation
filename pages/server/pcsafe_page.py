@@ -23,6 +23,7 @@ class AdminPcsafePage(AdminBasePage):
 
     def goto_pcsafe(self) -> None:
         """PC보안점검 관리(/pcsafe) 페이지로 이동"""
+        self.bring_to_front()
         if not self.page.url.rstrip("/").endswith("/pcsafe"):
             print(">>> [관리자 웹] /pcsafe 메뉴로 이동 중...")
             self.page.goto(self.PCDAFE_URL, timeout=15000)
@@ -98,6 +99,7 @@ class AdminPcsafePage(AdminBasePage):
         if target_state not in ("ON", "OFF"):
             raise ValueError(f"올바르지 않은 상태 값: {target_state} (ON 또는 OFF여야 함)")
 
+        self.bring_to_front()
         target_label, row = self._get_user_row(user_ip=user_ip, username=username)
         col_idx = self._get_hr_ui_col_index()
         current_state = row.locator("td").nth(col_idx).inner_text().strip()
@@ -135,6 +137,7 @@ class AdminPcsafePage(AdminBasePage):
 
     def refresh_user_search(self, user_ip: Optional[str] = None) -> None:
         """사용자 검색어를 다시 입력/검색하여 최신 데이터를 반영"""
+        self.bring_to_front()
         target_ip = user_ip or self.target_ip or self.search_current_user_by_ip()
         search_input = self.page.locator("input[placeholder='검색어 입력']")
         search_btn = self.page.locator("button:text-is('검색')").first
@@ -188,6 +191,7 @@ class AdminPcsafePage(AdminBasePage):
         사용자 정보 모달(ClientFormModal)을 열고 사번/사용자명을 추출한 뒤 모달을 닫습니다.
         반환값: {'emp_no': '...', 'username': '...'}
         """
+        self.bring_to_front()
         target_ip, row = self._get_user_row(user_ip=user_ip)
         user_col_idx = self._get_col_index("사용자", default=9)
         user_btn = row.locator("td").nth(user_col_idx).locator("button, a").first

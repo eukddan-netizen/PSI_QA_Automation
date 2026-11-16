@@ -208,13 +208,9 @@ class HelpModalPage:
 
     def bring_to_front(self) -> None:
         """도움말 창을 포커스 활성화"""
-        try:
-            win32gui.ShowWindow(self.hwnd, win32con.SW_RESTORE)
-            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
-            win32gui.SetForegroundWindow(self.hwnd)
+        from core.desktop_utils import bring_window_to_front
+        if bring_window_to_front(self.hwnd):
             time.sleep(0.3)
-        except Exception:
-            pass
 
     def close(self, timeout: float = 5.0) -> bool:
         """우측 상단 닫기(X) 버튼을 클릭하여 도움말 창 닫기"""

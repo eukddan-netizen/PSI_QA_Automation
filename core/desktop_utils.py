@@ -10,10 +10,69 @@ import os
 import subprocess
 import time
 from typing import Optional, Set
-import win32service
+import win32api
 import win32con
+import win32gui
+import win32process
+import win32service
 
 user32 = ctypes.windll.user32
+
+
+def bring_window_to_front(hwnd: int) -> bool:
+    """
+    지정된 HWND 창을 최소화 해제(필요 시)하고 Windows 전경 잠금을 우회해 최상단으로 올립니다.
+    """
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return False
+
+    try:
+        if win32gui.IsIconic(hwnd):
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        else:
+            win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+
+        fg_hwnd = win32gui.GetForegroundWindow()
+        fg_tid = win32process.GetWindowThreadProcessId(fg_hwnd)[0] if fg_hwnd else 0
+        cur_tid = win32api.GetCurrentThreadId()
+        attached = False
+        if fg_tid and fg_tid != cur_tid:
+            attached = bool(user32.AttachThreadInput(cur_tid, fg_tid, True))
+        try:
+            win32gui.BringWindowToTop(hwnd)
+            win32gui.SetForegroundWindow(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(cur_tid, fg_tid, False)
+        return True
+    except Exception:
+        return False
+
+
+def bring_chrome_to_front(title_hint: str = "") -> bool:
+    """
+    Playwright/CDP로 제어 중인 관리자 웹 Chrome 창을 최상단으로 올립니다.
+    """
+    matched_hwnd = 0
+
+    def cb(h, _):
+        nonlocal matched_hwnd
+        if matched_hwnd or not win32gui.IsWindowVisible(h):
+            return
+        if win32gui.GetClassName(h) != "Chrome_WidgetWin_1":
+            return
+        title = win32gui.GetWindowText(h) or ""
+        if not title:
+            return
+        if title_hint and title_hint in title:
+            matched_hwnd = h
+        elif any(k in title for k in ("TA-PRS", "192.168", "about:blank")):
+            matched_hwnd = h
+
+    win32gui.EnumWindows(cb, None)
+    if matched_hwnd:
+        return bring_window_to_front(matched_hwnd)
+    return False
 
 
 def is_already_on_user_desktop() -> bool:

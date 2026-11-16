@@ -17,6 +17,7 @@ class AdminPatchPage(AdminBasePage):
 
     def goto_patch(self) -> None:
         """패치 관리(/patch) 페이지로 이동"""
+        self.bring_to_front()
         if not self.page.url.rstrip("/").endswith("/patch"):
             print(f">>> [관리자 웹] {self.PATCH_URL} 이동 중...")
             self.page.goto(self.PATCH_URL, timeout=15000)
@@ -37,6 +38,7 @@ class AdminPatchPage(AdminBasePage):
 
     def click_user_recommended_count(self, row: Locator) -> None:
         """'권고' 개수 버튼을 클릭하여 사용자 패치 상세(/patch/client) 페이지로 이동"""
+        self.bring_to_front()
         btn = self._get_recommended_button(row)
         print(f">>> [관리자 웹] '권고' 개수 버튼 클릭: {btn.inner_text().strip()}")
         btn.click()

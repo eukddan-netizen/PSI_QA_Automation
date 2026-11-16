@@ -32,6 +32,7 @@ class AdminManageConfigPage(AdminBasePage):
 
     def goto_manage_config(self) -> None:
         """환경설정(/manageConfig) 페이지로 이동"""
+        self.bring_to_front()
         if "/manageConfig" not in self.page.url:
             print(f"\n>>> [관리자 웹] {self.MANAGE_CONFIG_URL} 이동 중...")
             self.page.goto(self.MANAGE_CONFIG_URL, timeout=15000)
@@ -97,6 +98,7 @@ class AdminManageConfigPage(AdminBasePage):
 
     def save_config(self) -> None:
         """가장 하단의 '저장' 버튼 클릭 및 완료 모달('정상 처리되었습니다.') 확인"""
+        self.bring_to_front()
         print(">>> [관리자 웹] 하단 [저장] 버튼 클릭...")
         save_btn = self.page.locator("button[type='submit']:has-text('저장')").first
         save_btn.scroll_into_view_if_needed()

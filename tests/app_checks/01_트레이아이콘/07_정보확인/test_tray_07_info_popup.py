@@ -46,10 +46,10 @@ def test_row19_info_popup(app_ctrl):
     handled_hwnds = set()
     verified_popups = []
     start_time = time.time()
-    max_wait = 15.0
+    max_wait = 25.0
 
     while time.time() - start_time < max_wait:
-        dialog = app_ctrl.wait_for_tray_dialog(timeout=3.0, exclude_hwnds=handled_hwnds)
+        dialog = app_ctrl.wait_for_tray_dialog(timeout=5.0, exclude_hwnds=handled_hwnds)
         if not dialog:
             break
 

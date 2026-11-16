@@ -63,13 +63,9 @@ class PasswordSafetyModalPage:
 
     def bring_to_front(self) -> None:
         """메인 창 활성화"""
-        try:
-            win32gui.ShowWindow(self.hwnd, win32con.SW_RESTORE)
-            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
-            win32gui.SetForegroundWindow(self.hwnd)
+        from core.desktop_utils import bring_window_to_front
+        if bring_window_to_front(self.hwnd):
             time.sleep(0.3)
-        except Exception:
-            pass
 
     @classmethod
     def open_from_main(cls, main_page, timeout: float = 8.0) -> "PasswordSafetyModalPage":

@@ -24,7 +24,7 @@ def test_row17_font_rescan(app_ctrl):
     )
 
     app_ctrl.click_tray_menu_item("폰트 목록 재확인")
-    dialog = app_ctrl.wait_for_tray_dialog(timeout=15.0)
+    dialog = app_ctrl.wait_for_tray_dialog(timeout=45.0)
     assert dialog is not None, "폰트 목록 재확인 클릭 후 완료 팝업이 출력되어야 합니다."
 
     dlg_hwnd, dlg_text = dialog

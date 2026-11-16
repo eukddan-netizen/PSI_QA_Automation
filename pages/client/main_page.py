@@ -40,13 +40,9 @@ class MainPage:
 
     def bring_to_front(self) -> None:
         """보안점검 창을 복원하고 최상단 포커스로 활성화"""
-        try:
-            win32gui.ShowWindow(self.hwnd, win32con.SW_RESTORE)
-            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
-            win32gui.SetForegroundWindow(self.hwnd)
+        from core.desktop_utils import bring_window_to_front
+        if bring_window_to_front(self.hwnd):
             time.sleep(0.3)
-        except Exception:
-            pass
 
     def is_window_visible(self) -> bool:
         """보안점검 메인 창이 현재 화면에 표시 중인지 확인"""

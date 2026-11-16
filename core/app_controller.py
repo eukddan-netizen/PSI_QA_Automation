@@ -18,7 +18,7 @@ try:
 except Exception:
     pass
 
-from core.desktop_utils import switch_to_user_desktop
+from core.desktop_utils import bring_window_to_front, switch_to_user_desktop
 switch_to_user_desktop()
 
 import win32con
@@ -52,7 +52,11 @@ class AppController:
         os.system(f"taskkill /f /im {cls.EXE_NAME} >nul 2>&1")
         time.sleep(1)
 
-    def launch(self, timeout: int = 15) -> WindowSpecification:
+    def bring_to_front(self) -> bool:
+        """보안점검 메인 창을 최상단으로 활성화"""
+        return bring_window_to_front(self.hwnd) if self.hwnd else False
+
+    def launch(self, timeout: int = 30) -> WindowSpecification:
         """
         시스템 트레이 아이콘을 자동으로 더블클릭하여
         사용자 실제 모니터에 보안점검 창을 띄우고 창 객체를 반환합니다.
@@ -74,12 +78,7 @@ class AppController:
             raise TimeoutError(f"보안점검 창('{self.WINDOW_TITLE}')이 화면에 뜨지 않았습니다.")
 
         # 4. 전면 활성화
-        try:
-            win32gui.ShowWindow(self.hwnd, win32con.SW_RESTORE)
-            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
-            win32gui.SetForegroundWindow(self.hwnd)
-        except Exception:
-            pass
+        self.bring_to_front()
 
         # 5. pywinauto 바인딩
         self.app = Application(backend="uia").connect(handle=self.hwnd)
@@ -171,10 +170,19 @@ class AppController:
             return pos[0], pos[1], False
 
         self._open_tray_overflow()
-        ov_hwnd = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
-        pos = self._find_ta_icon_center_in_hwnd(ov_hwnd)
-        if pos is not None:
-            return pos[0], pos[1], True
+        ov_hwnd = 0
+        deadline = time.time() + 2.5
+        while time.time() < deadline:
+            ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
+            if ov and win32gui.IsWindowVisible(ov):
+                ov_hwnd = ov
+                break
+            time.sleep(0.2)
+
+        if ov_hwnd:
+            pos = self._find_ta_icon_center_in_hwnd(ov_hwnd)
+            if pos is not None:
+                return pos[0], pos[1], True
 
         return 1463, 993, True
 
@@ -195,7 +203,7 @@ class AppController:
         if opened_overflow:
             self._close_tray_overflow()
 
-    def click_tray_menu_item(self, item_name: str, timeout: float = 5.0) -> None:
+    def click_tray_menu_item(self, item_name: str, timeout: float = 10.0) -> None:
         """
         트레이 아이콘을 우클릭하여 컨텍스트 메뉴(#32768)를 열고 지정된 항목을 클릭합니다.
         주의: taAssistant.exe가 관리자 권한(Elevated)으로 동작하는 환경에서는
@@ -252,7 +260,7 @@ class AppController:
         if opened_overflow:
             self._close_tray_overflow()
 
-    def wait_for_tray_dialog(self, timeout: float = 10.0, exclude_hwnds: Optional[set] = None) -> Optional[Tuple[int, str]]:
+    def wait_for_tray_dialog(self, timeout: float = 20.0, exclude_hwnds: Optional[set] = None) -> Optional[Tuple[int, str]]:
         """
         트레이 메뉴 클릭 후 출력되는 Win32 알림/정보 팝업(#32770)의 (HWND, 본문 텍스트)를 반환합니다.
         보안 에이전트 팝업은 윈도우 타이틀이 빈 문자열이고 내부 자식(Static) 컨트롤에 텍스트가 나뉘어 있으므로,
