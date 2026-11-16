@@ -5,8 +5,9 @@ PSI 관리자 웹 콘솔 (https://192.168.4.151) Playwright 제어 Page Object
 - 현재 PC IP(ipconfig) 기반 사용자 검색 및 정책 제어 (인사 UI 출력 등)
 """
 
+import re
 import time
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from playwright.sync_api import Locator, Page
 
 from common.os_utils import get_current_machine_ips
@@ -44,14 +45,18 @@ class AdminPcsafePage(AdminBasePage):
         self.target_ip = matched_ip
         return matched_ip
 
-    def _get_hr_ui_col_index(self) -> int:
-        """사용자 테이블 헤더에서 '인사 UI 출력' 컬럼 인덱스 조회 (기본값 7)"""
+    def _get_col_index(self, header_keyword: str, default: int) -> int:
+        """사용자 테이블 헤더에서 지정 키워드를 포함하는 컬럼 인덱스 조회"""
         table = self.page.locator("table", has_text="접속/단말 IP").first
         headers = table.locator("thead th, thead td")
         for idx in range(headers.count()):
-            if "인사 UI 출력" in headers.nth(idx).inner_text():
+            if header_keyword in headers.nth(idx).inner_text():
                 return idx
-        return 7
+        return default
+
+    def _get_hr_ui_col_index(self) -> int:
+        """사용자 테이블 헤더에서 '인사 UI 출력' 컬럼 인덱스 조회 (기본값 7)"""
+        return self._get_col_index("인사 UI 출력", default=7)
 
     def _get_user_row(
         self,
@@ -176,5 +181,53 @@ class AdminPcsafePage(AdminBasePage):
             "last_inspection_time": get_val("최종 점검일"),
             "status": get_val("접속 상태"),
         }
+
+    def get_user_modal_info(self, user_ip: Optional[str] = None) -> Dict[str, str]:
+        """
+        /pcsafe 사용자 목록에서 해당 IP 행의 '사용자' 컬럼 버튼을 클릭해
+        사용자 정보 모달(ClientFormModal)을 열고 사번/사용자명을 추출한 뒤 모달을 닫습니다.
+        반환값: {'emp_no': '...', 'username': '...'}
+        """
+        target_ip, row = self._get_user_row(user_ip=user_ip)
+        user_col_idx = self._get_col_index("사용자", default=9)
+        user_btn = row.locator("td").nth(user_col_idx).locator("button, a").first
+        user_btn.wait_for(state="visible", timeout=5000)
+        print(f">>> [관리자 웹] '{target_ip}' 행의 사용자명 버튼 클릭 -> 사용자 정보 모달 오픈...")
+        user_btn.click()
+
+        modal = self.page.locator("[data-testid='ClientFormModal']")
+        modal.wait_for(state="visible", timeout=5000)
+
+        emp_no = ""
+        username = ""
+        try:
+            emp_input = (
+                modal.locator("div.flex.w-full")
+                .filter(has=self.page.locator("div.font-semibold", has_text=re.compile(r"^\s*사번\s*$")))
+                .locator("input")
+                .first
+            )
+            name_input = (
+                modal.locator("div.flex.w-full")
+                .filter(has=self.page.locator("div.font-semibold", has_text=re.compile(r"^\s*사용자\s*$")))
+                .locator("input")
+                .first
+            )
+
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                emp_no = emp_input.input_value().strip()
+                username = name_input.input_value().strip()
+                if emp_no and username:
+                    break
+                self.page.wait_for_timeout(200)
+        finally:
+            close_btn = modal.locator("button[title='닫기']").first
+            if close_btn.is_visible():
+                close_btn.click()
+                modal.wait_for(state="hidden", timeout=5000)
+
+        print(f">>> [관리자 웹] 모달 조회 결과 -> 사번: {emp_no!r}, 사용자명: {username!r}")
+        return {"emp_no": emp_no, "username": username}
 
 

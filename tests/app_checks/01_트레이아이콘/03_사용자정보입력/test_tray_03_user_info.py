@@ -2,13 +2,12 @@
 [대분류: 트레이 아이콘 > 중분류 3: 사용자 정보 입력]
 
 [정상 등록 계정 정보]
-- 사번: 0014
-- 이름: KYC
+- 관리자 웹(/pcsafe)에서 현재 PC IP 검색 후 사용자 정보 모달에서 사번/사용자명을 동적으로 조회
 
 - 3_0001: [웹뷰 진입] 트레이 > 사용자 정보 입력 웹뷰 정상 출력 검증
 - 3_0002: [필수 값 미입력] 사번/이름/둘 다 미입력 시 alert 팝업 검증
 - 3_0003: [잘못된 값 입력] 미등록 인사 정보 입력 후 저장 시 '등록된 인사 정보와 일치하지 않습니다' alert 팝업 검증
-- 3_0004: [정상 등록] 정상 인사 정보(0014 / KYC) 입력 후 저장 시 '정상 등록되었습니다' alert 팝업 검증
+- 3_0004: [정상 등록] 조회된 정상 인사 정보(사번 / 사용자명) 입력 후 저장 시 '정상 등록되었습니다' alert 팝업 검증
 """
 
 import time
@@ -19,10 +18,23 @@ from core.app_controller import AppController
 from pages.client.tray.user_info_form_page import UserInfoFormPage
 
 
-VALID_EMP_NO = "0014"
-VALID_NAME = "KYC"
 INVALID_EMP_NO = "9999"
 INVALID_NAME = "홍길동"
+
+
+@pytest.fixture(scope="module")
+def valid_user_info(admin_page):
+    """
+    관리자 웹(/pcsafe)에 접속해 현재 PC IP 사용자의 '사용자 정보' 모달에서
+    사번(emp_no)과 사용자명(username)을 동적으로 조회합니다.
+    """
+    info = admin_page.get_user_modal_info()
+    emp_no = info.get("emp_no", "").strip()
+    username = info.get("username", "").strip()
+    assert emp_no and username, (
+        f"관리자 웹(/pcsafe) 사용자 정보 모달에서 사번/사용자명을 조회할 수 없습니다: {info}"
+    )
+    return {"emp_no": emp_no, "username": username}
 
 
 @pytest.fixture(scope="module")
@@ -71,7 +83,7 @@ def test_row12_user_info_form_entry(user_form):
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_03
-def test_row13_user_info_required_fields_validation(user_form):
+def test_row13_user_info_required_fields_validation(user_form, valid_user_info):
     """
     [TC: 3_0002]
     - 조건: 필수 값 미입력
@@ -87,14 +99,14 @@ def test_row13_user_info_required_fields_validation(user_form):
         f"미입력 alert 팝업이 노출되어야 합니다. (실제: {alert1})"
     )
 
-    user_form.fill_form(emp_no=VALID_EMP_NO, name="")
+    user_form.fill_form(emp_no=valid_user_info["emp_no"], name="")
     user_form.click_save()
     alert2 = user_form.get_alert_text_and_accept(timeout=5.0)
     assert alert2 and any(k in alert2 for k in ["이름", "입력"]), (
         f"이름 미입력 alert 팝업이 노출되어야 합니다. (실제: {alert2})"
     )
 
-    user_form.fill_form(emp_no="", name=VALID_NAME)
+    user_form.fill_form(emp_no="", name=valid_user_info["username"])
     user_form.click_save()
     alert3 = user_form.get_alert_text_and_accept(timeout=5.0)
     assert alert3 and any(k in alert3 for k in ["사번", "번호", "입력"]), (
@@ -125,16 +137,16 @@ def test_row14_user_info_invalid_data_validation(user_form):
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_03
-def test_row15_user_info_success_registration(user_form):
+def test_row15_user_info_success_registration(user_form, valid_user_info):
     """
     [TC: 3_0004]
     - 조건: 정상 등록
-    - 액션: 등록되어 있는 정상 인사 정보(0014 / KYC) 입력 후 저장
+    - 액션: 관리자 웹에서 조회된 정상 인사 정보(사번 / 사용자명) 입력 후 저장
     - 기대 결과: '정상 등록되었습니다' alert 팝업 확인
     """
     assert user_form.is_visible(), "사용자 정보 입력 창이 열려 있어야 합니다."
 
-    user_form.fill_form(emp_no=VALID_EMP_NO, name=VALID_NAME)
+    user_form.fill_form(emp_no=valid_user_info["emp_no"], name=valid_user_info["username"])
     user_form.click_save()
     alert = user_form.get_alert_text_and_accept(timeout=5.0)
     assert alert and ("정상 등록" in alert or "성공" in alert or "등록되었습니다" in alert), (
