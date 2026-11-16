@@ -33,10 +33,10 @@
 | `.\run 트레이` / `.\run tray` | `01_tray_menu` (트레이 아이콘) | `app_tray` | 중분류 1~7 전체 |
 | `.\run 메인` / `.\run main` | `02_main_tab` (보안점검 메인 탭) | `app_main` | 중분류 1~7 전체 |
 | `.\run 점검` / `.\run inspection` | `03_inspection_tab` (점검 탭) | `app_inspection` | 사용자 정보 / 실시간 진행 / 결과 전환 |
-| `.\run 점검결과` / `.\run result` | `07_result_common` (점검결과 탭) | `app_result` | 공통 UI / 정렬 |
-| `.\run 점검이력` / `.\run history` | `04_history` (점검이력 탭) | `app_history` | 이력 리스트 / 상세 / 엑셀 내보내기 |
-| `.\run PC정리` / `.\run clean` | `05_pc_clean` (PC정리 탭) | `app_clean` | OS/백신/방화벽/캐시 정리 |
-| `.\run 설정` / `.\run settings` | `06_settings` (설정 탭) | `app_settings` | 일반/외형/정보 |
+| `.\run 점검결과` / `.\run result` | `04_inspection_result_tab` (점검결과 탭) | `app_result` | 방패/점수/정책정합성/카운트/정렬 |
+| `.\run 점검이력` / `.\run history` | `05_history` (점검이력 탭) | `app_history` | 이력 리스트 / 상세 / 엑셀 내보내기 |
+| `.\run PC정리` / `.\run clean` | `06_pc_clean` (PC정리 탭) | `app_clean` | OS/백신/방화벽/캐시 정리 |
+| `.\run 설정` / `.\run settings` | `07_settings` (설정 탭) | `app_settings` | 일반/외형/정보 |
 
 #### 중분류 / 세부 테스트 필터링 예시
 ```powershell

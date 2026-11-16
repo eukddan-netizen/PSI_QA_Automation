@@ -22,7 +22,7 @@ class AdminPcsafePage(AdminBasePage):
 
     def goto_pcsafe(self) -> None:
         """PC보안점검 관리(/pcsafe) 페이지로 이동"""
-        if "/pcsafe" not in self.page.url:
+        if not self.page.url.rstrip("/").endswith("/pcsafe"):
             print(">>> [관리자 웹] /pcsafe 메뉴로 이동 중...")
             self.page.goto(self.PCDAFE_URL, timeout=15000)
         self.page.locator("input[placeholder='검색어 입력']").wait_for(state="visible", timeout=10000)

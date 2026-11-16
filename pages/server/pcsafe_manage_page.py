@@ -7,7 +7,7 @@ PSI 관리자 웹 콘솔 보안점검 항목 관리 (/pcsafeManage) Playwright P
 """
 
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from playwright.sync_api import Locator, Page
 
 from pages.server.base_page import AdminBasePage
@@ -58,6 +58,78 @@ class AdminPcsafeManagePage(AdminBasePage):
         print(f">>> [관리자 웹] 정책 선택: '{policy_name}' (value={target_value})")
         sel.select_option(value=target_value)
         self.page.wait_for_timeout(1200)
+
+    def get_department_policy(self, dept_name: str) -> str:
+        """
+        좌측 부서트리에서 지정된 부서명(예: 't1', 'QA')을 찾아
+        해당 부서에 적용 중인 정책 이름(예: 't1', '전체')을 반환합니다.
+        """
+        self.page.locator("span.text-gray-400").first.wait_for(state="visible", timeout=10000)
+        nodes = self.page.evaluate(
+            """() => {
+                const labels = Array.from(document.querySelectorAll('label'));
+                const result = [];
+                for (const lb of labels) {
+                    const sp = lb.querySelector('span.text-gray-400');
+                    if (!sp) continue;
+                    const policyRaw = sp.innerText.trim();
+                    const clone = lb.cloneNode(true);
+                    const cloneSp = clone.querySelector('span.text-gray-400');
+                    if (cloneSp) cloneSp.remove();
+                    const dept = clone.innerText.trim();
+                    const policy = policyRaw.replace(/^\\(|\\)$/g, '').trim();
+                    result.push({ dept, policy });
+                }
+                return result;
+            }"""
+        )
+        target = dept_name.strip()
+        for node in nodes:
+            if node["dept"] == target:
+                print(f">>> [관리자 웹] 좌측 부서트리 '{target}' 적용 정책 확인: '{node['policy']}'")
+                return node["policy"]
+        for node in nodes:
+            if node["dept"].lower() == target.lower():
+                print(f">>> [관리자 웹] 좌측 부서트리 '{target}' 적용 정책 확인: '{node['policy']}'")
+                return node["policy"]
+
+        raise ValueError(f"좌측 부서트리에서 '{dept_name}' 부서를 찾을 수 없습니다. (탐색된 부서: {[n['dept'] for n in nodes]})")
+
+    def get_all_policy_items(self) -> List[Dict[str, Any]]:
+        """
+        우측 '정책 관리' 테이블의 모든 점검 항목 정책 정보(No., 항목명, 점수, 점검 예외, 사용 여부, 취약 시 차단, 취약 시 버튼 표시)를 반환합니다.
+        """
+        self.page.locator("table tbody tr").first.wait_for(state="visible", timeout=10000)
+        items = self.page.evaluate(
+            """() => {
+                return Array.from(document.querySelectorAll('table tbody tr')).map(tr => {
+                    const tds = Array.from(tr.querySelectorAll('td'));
+                    if (tds.length < 7) return null;
+                    const noStr = tds[0].innerText.trim();
+                    if (!/^\\d+$/.test(noStr)) return null;
+                    const name = tds[1].innerText.trim();
+                    const scoreInp = tds[2].querySelector('input');
+                    const score = scoreInp ? Number(scoreInp.value) : 0;
+                    const exception = tds[3].innerText.trim();
+                    const use = tds[4].innerText.trim();
+                    const blockOnVuln = tds[5].innerText.trim();
+                    const btnSel = tds[6].querySelector('select');
+                    const vulnButton = btnSel
+                        ? (btnSel.options[btnSel.selectedIndex]?.text || '').trim()
+                        : tds[6].innerText.trim();
+                    return {
+                        no: Number(noStr),
+                        name,
+                        score,
+                        exception,
+                        use,
+                        block_on_vuln: blockOnVuln,
+                        vuln_button: vulnButton,
+                    };
+                }).filter(Boolean);
+            }"""
+        )
+        return items
 
     def _get_item_row(self, item_no: int, item_name: Optional[str] = None) -> Locator:
         """우측 정책 관리 테이블에서 No.(및 선택적 항목명)로 해당 행 반환"""

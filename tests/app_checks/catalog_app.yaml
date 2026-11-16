@@ -75,29 +75,29 @@ app_checks:
     description: 실시간 점검 진행 항목 표시, 진행률(100%), 완료 후 결과 탭 자동 전환
 
   - id: app_04
-    folder: 04_history
+    folder: 04_inspection_result_tab
+    title: 점검결과 탭 공통 UI 및 정렬
+    excel_rows: 66~71
+    marker: app_result
+    description: 방패/점수 및 카운트 무결성, 사용자 정보/서버 정책 정합성, 결과 테이블 헤더(번호, 점검 항목, 결과) 클릭 정렬 검증
+
+  - id: app_05
+    folder: 05_history
     title: 점검이력 탭 및 엑셀 내보내기
     excel_rows: 38~47
     marker: app_history
     description: 점검 이력 리스트, 상세 내역 토글/전체 펼치기, 엑셀 파일 저장 및 데이터 정합성 검증
 
-  - id: app_05
-    folder: 05_pc_clean
+  - id: app_06
+    folder: 06_pc_clean
     title: PC정리 탭 및 시스템 정보 연동
     excel_rows: 48~58
     marker: app_clean
     description: OS버전/백신/방화벽 실시간 연동, 휴지통, %temp%, 브라우저 캐시 정리 및 실제 OS 삭제 검증
 
-  - id: app_06
-    folder: 06_settings
+  - id: app_07
+    folder: 07_settings
     title: 설정 탭 (일반/외형/정보)
     excel_rows: 59~65
     marker: app_settings
     description: 결과 화면 자동 이동 옵션 해제 팝업, 다크/라이트 테마 변경 및 버전 정보 출력
-
-  - id: app_07
-    folder: 07_result_common
-    title: 점검결과 탭 공통 UI 및 정렬
-    excel_rows: 66~71
-    marker: app_result
-    description: 방패/점수 및 카운트 무결성, 결과 테이블 헤더(번호, 항목명, 결과) 클릭 정렬 검증

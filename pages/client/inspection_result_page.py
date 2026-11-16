@@ -11,7 +11,8 @@ import re
 import time
 import win32gui
 import win32con
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from PIL import ImageGrab
 from pywinauto import Application
 
 
@@ -36,6 +37,184 @@ class InspectionResultPage:
         h = self._get_target_window()
         app = Application(backend="uia").connect(handle=h)
         return app.window(handle=h)
+
+    def bring_to_front(self) -> None:
+        """보안점검 창을 복원하고 최상단 포커스로 활성화"""
+        try:
+            win32gui.ShowWindow(self.hwnd, win32con.SW_RESTORE)
+            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
+            win32gui.SetForegroundWindow(self.hwnd)
+            time.sleep(0.3)
+        except Exception:
+            pass
+
+    def get_active_tab_name(self) -> Optional[str]:
+        """좌측 사이드바에서 현재 활성화된 탭 이름 반환"""
+        win = self._get_app_window()
+        for link in win.descendants(control_type="Hyperlink"):
+            cls = link.element_info.class_name or ""
+            if "current" in cls or "router-link-active" in cls:
+                name = (link.element_info.name or "").strip()
+                if name:
+                    return name
+        return None
+
+    def wait_for_result_ready(self, timeout: float = 12.0) -> Dict[str, Any]:
+        """'점검결과' 탭 DOM(요약 점수, 사용자 정보, 결과 테이블) 렌더링 완료까지 대기"""
+        deadline = time.time() + timeout
+        last_stats: Dict[str, Any] = {}
+        while True:
+            try:
+                if self.get_active_tab_name() == "점검결과":
+                    last_stats = self.get_summary_stats()
+                    user_info = self.get_user_info()
+                    rows = self.get_all_result_rows()
+                    if (
+                        last_stats.get("score_num") is not None
+                        and last_stats.get("total_num") is not None
+                        and user_info.get("username")
+                        and len(rows) > 0
+                    ):
+                        time.sleep(0.3)
+                        return last_stats
+            except Exception:
+                pass
+            if time.time() >= deadline:
+                raise TimeoutError(f"'점검결과' 탭 DOM 로딩 대기 시간 초과: 마지막 요약={last_stats}")
+            time.sleep(0.35)
+
+    def get_user_info(self) -> Dict[str, str]:
+        """'점검결과' 탭 우측 상단 '사용자 정보' 카드 데이터 추출"""
+        win = self._get_app_window()
+        texts = [(el.element_info.name or "").strip() for el in win.descendants(control_type="Text")]
+        info: Dict[str, str] = {}
+        for i, t in enumerate(texts):
+            if t == "OS 정보" and i + 1 < len(texts):
+                info["os"] = texts[i + 1]
+            elif t == "부서명" and i + 1 < len(texts):
+                info["department"] = texts[i + 1]
+            elif t == "사용자명" and i + 1 < len(texts):
+                info["username"] = texts[i + 1]
+            elif t == "사용자 IP" and i + 1 < len(texts):
+                info["ip"] = texts[i + 1]
+            elif t == "최근점검일시" and i + 1 < len(texts):
+                info["last_inspection_time"] = texts[i + 1]
+        return info
+
+    def get_shield_visual_state(self) -> Dict[str, Any]:
+        """
+        '점검결과' 탭 좌측 상단 방패 아이콘 영역을 화면 캡처하여
+        색상 기반으로 상태('양호'=파랑 / '위험'=빨강 / '대기'=회색)를 판별합니다.
+        """
+        self.bring_to_front()
+        win = self._get_app_window()
+        main_rect = win.rectangle()
+        for grp in win.descendants(control_type="Group"):
+            if (grp.element_info.class_name or "") == "main":
+                main_rect = grp.rectangle()
+                break
+
+        score_label = None
+        score_right = None
+        texts = list(win.descendants(control_type="Text"))
+        for idx, elem in enumerate(texts):
+            name = (elem.element_info.name or "").strip()
+            if name == "점검결과":
+                score_label = elem
+                score_right = elem.rectangle().right
+                # 바로 뒤의 점수 숫자/단위('88', '점')까지 포함해 중앙 X 계산
+                for k in range(idx + 1, min(len(texts), idx + 4)):
+                    nxt_name = (texts[k].element_info.name or "").strip()
+                    if nxt_name.isdigit() or nxt_name == "점":
+                        score_right = max(score_right, texts[k].rectangle().right)
+                break
+
+        if score_label is None:
+            raise RuntimeError("점검결과 탭에서 '점검결과' 점수 라벨을 찾을 수 없습니다.")
+
+        label_rect = score_label.rectangle()
+        cx = (label_rect.left + (score_right or label_rect.right)) // 2
+        top_y = main_rect.top + 12
+        bot_y = max(top_y + 40, label_rect.top - 8)
+        bbox = (cx - 105, top_y, cx + 105, bot_y)
+
+        crop = ImageGrab.grab(bbox=bbox).convert("RGB")
+        pixels = crop.get_flattened_data()
+
+        red = sum(1 for r, g, b in pixels if r > 150 and g < 90 and b < 90)
+        blue = sum(1 for r, g, b in pixels if b > 170 and r < 100)
+        gray = sum(1 for r, g, b in pixels if abs(r - g) < 20 and abs(g - b) < 20 and 80 < r < 230)
+
+        if red > 800 and red > blue * 2:
+            state = "위험"
+        elif blue > 800 and blue > red * 2:
+            state = "양호"
+        elif gray > 800 and red < 150 and blue < 150:
+            state = "대기"
+        else:
+            state = "알수없음"
+
+        return {"state": state, "red": red, "blue": blue, "gray": gray, "bbox": bbox}
+
+    def get_all_result_rows(self) -> List[Dict[str, Any]]:
+        """점검결과 테이블의 전체 행(번호, 점검 항목, 결과, 조치/상세보기 버튼 여부)을 파싱하여 반환"""
+        win = self._get_app_window()
+        desc = list(win.descendants())
+        rows: List[Dict[str, Any]] = []
+
+        for i, elem in enumerate(desc):
+            if elem.element_info.control_type == "DataItem" and (elem.element_info.class_name or "") == "col-number":
+                no_text = (elem.element_info.name or "").strip()
+                if not no_text.isdigit():
+                    continue
+
+                title = ""
+                status = ""
+                has_action_btn = False
+                has_detail_btn = False
+
+                for j in range(i + 1, min(len(desc), i + 14)):
+                    nxt = desc[j]
+                    nxt_ct = nxt.element_info.control_type
+                    nxt_cls = nxt.element_info.class_name or ""
+                    nxt_name = (nxt.element_info.name or "").strip()
+
+                    if nxt_ct == "DataItem" and nxt_cls == "col-number":
+                        break
+                    if nxt_ct == "DataItem" and nxt_cls == "col-title" and not title:
+                        title = nxt_name
+                    elif nxt_ct == "DataItem" and nxt_cls == "col-button" and nxt_name in ("안전", "취약", "점검불가") and not status:
+                        status = nxt_name
+                    elif nxt_ct == "Button":
+                        if nxt_name == "조치":
+                            has_action_btn = True
+                        elif nxt_name == "상세보기":
+                            has_detail_btn = True
+
+                rows.append({
+                    "no": int(no_text),
+                    "title": title,
+                    "status": status,
+                    "has_action_button": has_action_btn,
+                    "has_detail_button": has_detail_btn,
+                })
+
+        return rows
+
+    def click_table_header(self, header_name: str) -> None:
+        """점검결과 테이블의 정렬 가능 컬럼 헤더('번호', '점검 항목', '결과') 클릭"""
+        self.bring_to_front()
+        win = self._get_app_window()
+        for d in win.descendants(control_type="DataItem"):
+            cls = d.element_info.class_name or ""
+            name = (d.element_info.name or "").strip()
+            if name == header_name and "sortable" in cls:
+                print(f">>> [ResultPage] 테이블 '{header_name}' 헤더 클릭")
+                self._click_element(d)
+                time.sleep(0.6)
+                return
+
+        raise RuntimeError(f"점검결과 테이블에서 '{header_name}' 정렬 헤더를 찾을 수 없습니다.")
 
     def navigate_to_results(self):
         """사이드바의 '점검결과' 메뉴 클릭"""

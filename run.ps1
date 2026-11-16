@@ -150,13 +150,13 @@ if ($Target -match "^main_?(\d+)$") {
 if ($Target -eq "app") {
     if ($SubTarget -eq "list") {
         Write-Host "[프로그램 UI/기능 점검(app_checks) 대분류 목록]" -ForegroundColor Cyan
-        Write-Host "  tray        (app_tray)       : 01_tray_menu      (트레이 아이콘, 중분류 1~7)"
-        Write-Host "  main        (app_main)       : 02_main_tab       (메인 탭, 중분류 1~7)"
-        Write-Host "  inspection  (app_inspection) : 03_inspection_tab (점검 탭)"
-        Write-Host "  history     (app_history)    : 04_history        (점검이력 탭)"
-        Write-Host "  clean       (app_clean)      : 05_pc_clean       (PC정리 탭)"
-        Write-Host "  settings    (app_settings)   : 06_settings       (설정 탭)"
-        Write-Host "  result      (app_result)     : 07_result_common  (점검결과 탭 공통)"
+        Write-Host "  tray        (app_tray)       : 01_tray_menu              (트레이 아이콘, 중분류 1~7)"
+        Write-Host "  main        (app_main)       : 02_main_tab               (메인 탭, 중분류 1~7)"
+        Write-Host "  inspection  (app_inspection) : 03_inspection_tab         (점검 탭)"
+        Write-Host "  result      (app_result)     : 04_inspection_result_tab  (점검결과 탭)"
+        Write-Host "  history     (app_history)    : 05_history                (점검이력 탭)"
+        Write-Host "  clean       (app_clean)      : 06_pc_clean               (PC정리 탭)"
+        Write-Host "  settings    (app_settings)   : 07_settings               (설정 탭)"
         exit 0
     }
     Write-Host "[실행] 프로그램 자체 UI 및 기능 점검(app_checks) 실행 중..." -ForegroundColor Green
@@ -168,14 +168,14 @@ $TabMarkerMap = @{
     "점검"       = @{ Marker = "app_inspection"; Label = "점검 탭 (03_inspection_tab)" }
     "inspection" = @{ Marker = "app_inspection"; Label = "점검 탭 (03_inspection_tab)" }
     "insp"       = @{ Marker = "app_inspection"; Label = "점검 탭 (03_inspection_tab)" }
-    "점검결과"   = @{ Marker = "app_result";     Label = "점검결과 탭 공통 (07_result_common)" }
-    "result"     = @{ Marker = "app_result";     Label = "점검결과 탭 공통 (07_result_common)" }
-    "점검이력"   = @{ Marker = "app_history";    Label = "점검이력 탭 (04_history)" }
-    "history"    = @{ Marker = "app_history";    Label = "점검이력 탭 (04_history)" }
-    "PC정리"     = @{ Marker = "app_clean";      Label = "PC정리 탭 (05_pc_clean)" }
-    "clean"      = @{ Marker = "app_clean";      Label = "PC정리 탭 (05_pc_clean)" }
-    "설정"       = @{ Marker = "app_settings";   Label = "설정 탭 (06_settings)" }
-    "settings"   = @{ Marker = "app_settings";   Label = "설정 탭 (06_settings)" }
+    "점검결과"   = @{ Marker = "app_result";     Label = "점검결과 탭 (04_inspection_result_tab)" }
+    "result"     = @{ Marker = "app_result";     Label = "점검결과 탭 (04_inspection_result_tab)" }
+    "점검이력"   = @{ Marker = "app_history";    Label = "점검이력 탭 (05_history)" }
+    "history"    = @{ Marker = "app_history";    Label = "점검이력 탭 (05_history)" }
+    "PC정리"     = @{ Marker = "app_clean";      Label = "PC정리 탭 (06_pc_clean)" }
+    "clean"      = @{ Marker = "app_clean";      Label = "PC정리 탭 (06_pc_clean)" }
+    "설정"       = @{ Marker = "app_settings";   Label = "설정 탭 (07_settings)" }
+    "settings"   = @{ Marker = "app_settings";   Label = "설정 탭 (07_settings)" }
 }
 
 if ($TabMarkerMap.ContainsKey($Target)) {

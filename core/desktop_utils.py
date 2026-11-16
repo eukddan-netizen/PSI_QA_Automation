@@ -50,10 +50,13 @@ def switch_to_user_desktop() -> bool:
 
 def _get_debug_chrome_pids(port: Optional[int] = None) -> Set[int]:
     """원격 디버깅 포트로 실행된 자동화 전용 chrome.exe 프로세스 PID 목록을 반환합니다."""
-    filter_expr = f"remote-debugging-port={port}" if port is not None else "remote-debugging-port="
+    if port is not None:
+        filter_expr = f"($_.CommandLine -match 'remote-debugging-port={port}') -or ($_.CommandLine -match 'chrome_psi_{port}')"
+    else:
+        filter_expr = "($_.CommandLine -match 'remote-debugging-port=') -or ($_.CommandLine -match 'chrome_psi_')"
     ps_cmd = (
         "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" "
-        f"| Where-Object {{ $_.CommandLine -match '{filter_expr}' }} "
+        f"| Where-Object {{ {filter_expr} }} "
         "| Select-Object -ExpandProperty ProcessId"
     )
     try:
@@ -74,7 +77,7 @@ def _get_debug_chrome_pids(port: Optional[int] = None) -> Set[int]:
 
 
 def _stop_debug_chrome(port: int, graceful: bool = True) -> None:
-    """지정 디버깅 포트의 자동화 전용 크롬 프로세스를 안전하게 종료합니다."""
+    """지정 디버깅 포트의 자동화 전용 크롬 프로세스만 안전하게 종료합니다. (사용자 개인 크롬은 건드리지 않음)"""
     if graceful:
         # 1. 정상 창 닫기(WM_CLOSE)를 먼저 시도하여 Chrome이 exit_type='Normal'로 종료되도록 유도
         graceful_cmd = (
@@ -89,7 +92,7 @@ def _stop_debug_chrome(port: int, graceful: bool = True) -> None:
                 capture_output=True,
                 timeout=4,
             )
-            deadline = time.time() + 1.5
+            deadline = time.time() + 2.0
             while time.time() < deadline:
                 if not _get_debug_chrome_pids(port):
                     return
@@ -97,13 +100,20 @@ def _stop_debug_chrome(port: int, graceful: bool = True) -> None:
         except Exception:
             pass
 
-    # 2. 남아있는 프로세스 강제 정리
+    # 2. 남아있는 자동화 전용 프로세스(remote-debugging-port / chrome_psi_{port})만 정확히 정리
     force_cmd = (
         "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" "
-        f"| Where-Object {{ $_.CommandLine -match 'remote-debugging-port={port}' }} "
+        f"| Where-Object {{ ($_.CommandLine -match 'remote-debugging-port={port}') -or ($_.CommandLine -match 'chrome_psi_{port}') }} "
         "| ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
     )
-    os.system(f'powershell -NoProfile -Command "{force_cmd}" >nul 2>&1')
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", force_cmd],
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception:
+        pass
 
 
 def _sanitize_chrome_profile(user_data_dir: str) -> None:
