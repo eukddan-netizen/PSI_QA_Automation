@@ -141,27 +141,47 @@ class AppController:
             user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 1515, 1170, 0, 0)
             time.sleep(0.3)
 
-    def _get_ta_tray_icon_center(self) -> Tuple[int, int]:
-        """오버플로 창 내 TA-STR / TA-PRS 트레이 아이콘의 화면 중앙 좌표를 탐색합니다."""
+    @staticmethod
+    def _find_ta_icon_center_in_hwnd(hwnd: int) -> Optional[Tuple[int, int]]:
+        """지정된 윈도우 핸들 내에서 TA-STR / TA-PRS 트레이 아이콘의 중앙 좌표를 탐색합니다."""
+        if not hwnd or not win32gui.IsWindowVisible(hwnd):
+            return None
         try:
-            ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
-            if ov and win32gui.IsWindowVisible(ov):
-                ov_app = Application(backend="uia").connect(handle=ov)
-                ov_win = ov_app.window(handle=ov)
-                for b in ov_win.descendants(control_type="Button"):
-                    name = b.element_info.name or ""
-                    if "TA-STR" in name or "TA-PRS" in name:
-                        rect = b.rectangle()
-                        return (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
+            app = Application(backend="uia").connect(handle=hwnd)
+            win = app.window(handle=hwnd)
+            for b in win.descendants(control_type="Button"):
+                name = b.element_info.name or ""
+                if "TA-STR" in name or "TA-PRS" in name:
+                    rect = b.rectangle()
+                    return (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
         except Exception:
             pass
-        return (1463, 993)
+        return None
+
+    def _locate_ta_tray_icon(self) -> Tuple[int, int, bool]:
+        """
+        TA-STR / TA-PRS 트레이 아이콘 좌표를 탐색합니다.
+        1) 작업표시줄(Shell_TrayWnd)에 직접 고정·노출된 경우 오버플로를 열지 않고 좌표 반환
+        2) 없으면 숨겨진 아이콘 영역(오버플로)을 열어 탐색
+        반환값: (x, y, opened_overflow)
+        """
+        tray_hwnd = win32gui.FindWindow("Shell_TrayWnd", None)
+        pos = self._find_ta_icon_center_in_hwnd(tray_hwnd)
+        if pos is not None:
+            return pos[0], pos[1], False
+
+        self._open_tray_overflow()
+        ov_hwnd = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
+        pos = self._find_ta_icon_center_in_hwnd(ov_hwnd)
+        if pos is not None:
+            return pos[0], pos[1], True
+
+        return 1463, 993, True
 
     def _double_click_tray_icon(self):
-        """작업표시줄 숨겨진 아이콘 영역에서 보안점검 아이콘 더블클릭 후 오버플로 닫기"""
+        """작업표시줄 또는 숨겨진 아이콘 영역에서 보안점검 아이콘 더블클릭"""
         user32 = ctypes.windll.user32
-        self._open_tray_overflow()
-        cx, cy = self._get_ta_tray_icon_center()
+        cx, cy, opened_overflow = self._locate_ta_tray_icon()
 
         user32.SetCursorPos(cx, cy)
         time.sleep(0.1)
@@ -172,7 +192,8 @@ class AppController:
             time.sleep(0.08)
         time.sleep(0.6)
 
-        self._close_tray_overflow()
+        if opened_overflow:
+            self._close_tray_overflow()
 
     def click_tray_menu_item(self, item_name: str, timeout: float = 5.0) -> None:
         """
@@ -184,8 +205,7 @@ class AppController:
             raise ValueError(f"지원하지 않는 트레이 메뉴 항목입니다: {item_name}")
 
         user32 = ctypes.windll.user32
-        self._open_tray_overflow()
-        ix, iy = self._get_ta_tray_icon_center()
+        ix, iy, opened_overflow = self._locate_ta_tray_icon()
 
         user32.SetCursorPos(ix, iy)
         time.sleep(0.1)
@@ -203,7 +223,8 @@ class AppController:
             time.sleep(0.2)
 
         if not menu_hwnd:
-            self._close_tray_overflow()
+            if opened_overflow:
+                self._close_tray_overflow()
             raise TimeoutError("트레이 우클릭 컨텍스트 메뉴(#32768)가 열리지 않았습니다.")
 
         rect = win32gui.GetWindowRect(menu_hwnd)
@@ -221,13 +242,15 @@ class AppController:
         if still_open and win32gui.IsWindowVisible(still_open):
             user32.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
             user32.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
-            self._close_tray_overflow()
+            if opened_overflow:
+                self._close_tray_overflow()
             raise PermissionError(
                 f"트레이 메뉴 '{item_name}' 클릭 후 메뉴가 닫히지 않았습니다. "
                 "관리자 권한 콘솔에서 실행 중인지 확인하십시오."
             )
 
-        self._close_tray_overflow()
+        if opened_overflow:
+            self._close_tray_overflow()
 
     def wait_for_tray_dialog(self, timeout: float = 10.0, exclude_hwnds: Optional[set] = None) -> Optional[Tuple[int, str]]:
         """
