@@ -1,5 +1,8 @@
 from pages.client.main_page import MainPage
+from pages.client.inspection_page import InspectionPage
 from pages.client.inspection_result_page import InspectionResultPage
+from pages.client.history_page import HistoryPage
+from pages.client.settings_page import SettingsPage
 from pages.client.modals.help_modal_page import (
     HelpModalPage,
     HELP_ITEMS_53_KO,
@@ -14,7 +17,10 @@ from pages.client.tray.user_info_form_page import UserInfoFormPage
 
 __all__ = [
     "MainPage",
+    "InspectionPage",
     "InspectionResultPage",
+    "HistoryPage",
+    "SettingsPage",
     "HelpModalPage",
     "HELP_ITEMS_53_KO",
     "HELP_ITEMS_53_EN",

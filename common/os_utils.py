@@ -272,3 +272,42 @@ def get_current_machine_ips(target_host: str = "192.168.4.151", target_port: int
         pass
 
     return ordered_ips
+
+
+def get_antivirus_products() -> List[str]:
+    """
+    Windows SecurityCenter2(AntivirusProduct)에서 등록된 바이러스 백신 제품명 목록을 반환합니다.
+    (활성화된 백신이 있으면 우선 정렬)
+    """
+    ps_cmd = (
+        "Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct "
+        "| Select-Object displayName, productState | ConvertTo-Json -Compress"
+    )
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if res.returncode != 0 or not res.stdout.strip():
+            return []
+        import json
+        data = json.loads(res.stdout.strip())
+        if isinstance(data, dict):
+            data = [data]
+        active = []
+        inactive = []
+        for item in data:
+            name = (item.get("displayName") or "").strip()
+            state = int(item.get("productState") or 0)
+            if not name:
+                continue
+            # Windows SecurityCenter2 productState: bit 0x1000 indicates enabled
+            if state & 0x1000:
+                active.append(name)
+            else:
+                inactive.append(name)
+        return active + [n for n in inactive if n not in active]
+    except Exception:
+        return []

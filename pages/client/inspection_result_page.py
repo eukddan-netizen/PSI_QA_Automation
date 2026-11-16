@@ -360,6 +360,66 @@ class InspectionResultPage:
             )
             return False
 
+    def get_item_detail_description(self, check_num: int, timeout: float = 4.0) -> Optional[str]:
+        """
+        특정 점검 번호 행의 '상세보기' 버튼을 클릭하여 상세 모달의 '・진단결과' 본문 텍스트를 반환하고 모달을 닫습니다.
+        """
+        win = self._get_app_window()
+        desc = list(win.descendants())
+        target_idx = self._find_item_Anchor_index(desc, check_num=check_num)
+        if target_idx == -1:
+            return None
+
+        detail_btn = None
+        for j in range(target_idx, min(len(desc), target_idx + 14)):
+            elem = desc[j]
+            elem_name = (elem.element_info.name or "").strip()
+            ctrl_type = elem.element_info.control_type
+            cls_name = elem.element_info.class_name or ""
+            if j > target_idx + 2 and ctrl_type == "DataItem" and cls_name == "col-number":
+                break
+            if ctrl_type == "Button" and elem_name == "상세보기":
+                detail_btn = elem
+                break
+
+        if detail_btn is None:
+            return None
+
+        try:
+            detail_btn.invoke()
+        except Exception:
+            self._click_element(detail_btn)
+
+        diag_text: Optional[str] = None
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            win_modal = self._get_app_window()
+            texts = [
+                (t.element_info.name or "").strip()
+                for t in win_modal.descendants(control_type="Text")
+                if t.element_info.name
+            ]
+            if "・진단결과" in texts:
+                idx = texts.index("・진단결과")
+                collected = []
+                for k in range(idx + 1, len(texts)):
+                    if texts[k].startswith("・"):
+                        break
+                    collected.append(texts[k])
+                diag_text = "\n".join(collected).strip()
+                for b in win_modal.descendants(control_type="Button"):
+                    if (b.element_info.name or "").strip() in ("확인", "닫기"):
+                        try:
+                            b.invoke()
+                        except Exception:
+                            self._click_element(b)
+                        time.sleep(0.25)
+                        break
+                break
+            time.sleep(0.2)
+
+        return diag_text
+
     def click_reinspect(self):
         """결과 화면 하단의 '재점검' 버튼 클릭"""
         win = self._get_app_window()

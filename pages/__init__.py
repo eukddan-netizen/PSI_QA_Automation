@@ -17,7 +17,10 @@ from pages.server.pcsafe_page import AdminPcsafePage
 
 # Client (데스크톱 클라이언트) Page Objects
 from pages.client.main_page import MainPage
+from pages.client.inspection_page import InspectionPage
 from pages.client.inspection_result_page import InspectionResultPage
+from pages.client.history_page import HistoryPage
+from pages.client.settings_page import SettingsPage
 from pages.client.modals.help_modal_page import (
     HelpModalPage,
     HELP_ITEMS_53_KO,
