@@ -36,7 +36,7 @@ app_checks:
         tc_ids: ["7_0001"]
 
   - id: app_02
-    folder: 02_main_dashboard
+    folder: 02_main_tab
     title: 보안점검 메인 탭
     excel_rows: 20~34
     marker: app_main
@@ -68,9 +68,9 @@ app_checks:
         excel_rows: 33~34
 
   - id: app_03
-    folder: 03_inspection_run
-    title: 점검 진행 탭
-    excel_rows: 35~37
+    folder: 03_inspection_tab
+    title: 점검 탭
+    excel_rows: 38~40
     marker: app_inspection
     description: 실시간 점검 진행 항목 표시, 진행률(100%), 완료 후 결과 탭 자동 전환
 

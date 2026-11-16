@@ -18,21 +18,29 @@ if (-not (Test-Path $VenvPytest)) {
 
 if ([string]::IsNullOrWhiteSpace($Target)) {
     Write-Host "[사용법]" -ForegroundColor Cyan
-    Write-Host "  .\run <점검번호>     예: .\run 7, .\run 14, .\run 45"
-    Write-Host "  .\run <시작-끝>      예: .\run 2-14 (2번부터 14번까지 연속 실행)"
-    Write-Host "  .\run <번호,번호..>  예: .\run 2,7,14 (특정 번호들 골라서 연속 실행)"
-    Write-Host "  .\run tray           트레이 아이콘 대분류 전체(중분류 1~7) 실행"
-    Write-Host "  .\run tray <번호>    트레이 아이콘 중분류별 실행 (1~7, 예: .\run tray 1, .\run tray 1-2, .\run tray list)"
-    Write-Host "  .\run main           보안점검 메인 탭 대분류 전체(중분류 1~7) 실행"
-    Write-Host "  .\run main <번호>    보안점검 메인 탭 중분류별 실행 (1~7, 예: .\run main 1, .\run main 1-3, .\run main list)"
-    Write-Host "  .\run app            프로그램 자체 UI/기능 점검(app_checks) 전체 실행"
-    Write-Host "  .\run pilot          구현된 시범 점검(7, 14, 45번) 일괄 실행"
-    Write-Host "  .\run tier_a         Tier A 점검 실행"
-    Write-Host "  .\run list           전체 점검 목록 확인"
+    Write-Host "  [보안점검 53개 항목]" -ForegroundColor Yellow
+    Write-Host "    .\run <점검번호>     예: .\run 7, .\run 14, .\run 45"
+    Write-Host "    .\run <시작-끝>      예: .\run 2-14 (2번부터 14번까지 연속 실행)"
+    Write-Host "    .\run <번호,번호..>  예: .\run 2,7,14 (특정 번호들 골라서 연속 실행)"
+    Write-Host "    .\run pilot          시범 구현 점검(7, 14, 45번) 일괄 실행"
+    Write-Host "    .\run tier_a         Tier A 점검 전체 실행"
+    Write-Host ""
+    Write-Host "  [프로그램 UI/기능 점검 (탭별 대분류 - 한글/영문 모두 지원)]" -ForegroundColor Yellow
+    Write-Host "    .\run app            app_checks 전체 실행 (.\run app list 로 탭 목록 확인)"
+    Write-Host "    .\run 트레이 [번호]  (또는 tray)       트레이 아이콘 전체 또는 중분류(1~7, list)"
+    Write-Host "    .\run 메인 [번호]    (또는 main)       메인 탭 전체 또는 중분류(1~7, list)"
+    Write-Host "    .\run 점검           (또는 inspection) 점검 탭 실행"
+    Write-Host "    .\run 점검결과       (또는 result)     점검결과 탭 공통 UI 실행"
+    Write-Host "    .\run 점검이력       (또는 history)    점검이력 탭 실행"
+    Write-Host "    .\run PC정리         (또는 clean)      PC정리 탭 실행"
+    Write-Host "    .\run 설정           (또는 settings)   설정 탭 실행"
+    Write-Host ""
+    Write-Host "  [기타]" -ForegroundColor Yellow
+    Write-Host "    .\run list           전체 pytest 테스트 목록 수집 확인"
     exit 0
 }
 
-if ($Target -eq "tray") {
+if ($Target -eq "tray" -or $Target -eq "트레이") {
     if (-not $IsElevated -and ($SubTarget -in "2", "3", "4", "5", "7" -or [string]::IsNullOrWhiteSpace($SubTarget) -or $SubTarget -match "[23457]")) {
         Write-Host ">>> [참고] 트레이 우클릭 메뉴(2, 3, 4, 5, 7번)는 상위 보안 프로세스(taAssistant) 제어를 위해 '관리자 권한으로 실행한 PowerShell'이 권장됩니다." -ForegroundColor Yellow
     }
@@ -87,7 +95,7 @@ if ($Target -match "^tray_?(\d+)$") {
     exit $LASTEXITCODE
 }
 
-if ($Target -eq "main") {
+if ($Target -eq "main" -or $Target -eq "메인") {
     if ([string]::IsNullOrWhiteSpace($SubTarget)) {
         Write-Host "[실행] 보안점검 메인 탭 대분류 전체(중분류 01~07) 순차 실행 중..." -ForegroundColor Green
         & $VenvPytest -m app_main -s
@@ -140,8 +148,44 @@ if ($Target -match "^main_?(\d+)$") {
 }
 
 if ($Target -eq "app") {
+    if ($SubTarget -eq "list") {
+        Write-Host "[프로그램 UI/기능 점검(app_checks) 대분류 목록]" -ForegroundColor Cyan
+        Write-Host "  tray        (app_tray)       : 01_tray_menu      (트레이 아이콘, 중분류 1~7)"
+        Write-Host "  main        (app_main)       : 02_main_tab       (메인 탭, 중분류 1~7)"
+        Write-Host "  inspection  (app_inspection) : 03_inspection_tab (점검 탭)"
+        Write-Host "  history     (app_history)    : 04_history        (점검이력 탭)"
+        Write-Host "  clean       (app_clean)      : 05_pc_clean       (PC정리 탭)"
+        Write-Host "  settings    (app_settings)   : 06_settings       (설정 탭)"
+        Write-Host "  result      (app_result)     : 07_result_common  (점검결과 탭 공통)"
+        exit 0
+    }
     Write-Host "[실행] 프로그램 자체 UI 및 기능 점검(app_checks) 실행 중..." -ForegroundColor Green
     & $VenvPytest -m app_check -s
+    exit $LASTEXITCODE
+}
+
+$TabMarkerMap = @{
+    "점검"       = @{ Marker = "app_inspection"; Label = "점검 탭 (03_inspection_tab)" }
+    "inspection" = @{ Marker = "app_inspection"; Label = "점검 탭 (03_inspection_tab)" }
+    "insp"       = @{ Marker = "app_inspection"; Label = "점검 탭 (03_inspection_tab)" }
+    "점검결과"   = @{ Marker = "app_result";     Label = "점검결과 탭 공통 (07_result_common)" }
+    "result"     = @{ Marker = "app_result";     Label = "점검결과 탭 공통 (07_result_common)" }
+    "점검이력"   = @{ Marker = "app_history";    Label = "점검이력 탭 (04_history)" }
+    "history"    = @{ Marker = "app_history";    Label = "점검이력 탭 (04_history)" }
+    "PC정리"     = @{ Marker = "app_clean";      Label = "PC정리 탭 (05_pc_clean)" }
+    "clean"      = @{ Marker = "app_clean";      Label = "PC정리 탭 (05_pc_clean)" }
+    "설정"       = @{ Marker = "app_settings";   Label = "설정 탭 (06_settings)" }
+    "settings"   = @{ Marker = "app_settings";   Label = "설정 탭 (06_settings)" }
+}
+
+if ($TabMarkerMap.ContainsKey($Target)) {
+    $Info = $TabMarkerMap[$Target]
+    Write-Host "[실행] $($Info.Label) 테스트 실행 중..." -ForegroundColor Green
+    if ([string]::IsNullOrWhiteSpace($SubTarget)) {
+        & $VenvPytest -m $Info.Marker -s
+    } else {
+        & $VenvPytest -m $Info.Marker -k $SubTarget -s
+    }
     exit $LASTEXITCODE
 }
 

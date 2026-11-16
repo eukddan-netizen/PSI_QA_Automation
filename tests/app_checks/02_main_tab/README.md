@@ -1,4 +1,4 @@
-# 보안점검 메인 탭 (`02_main_dashboard`)
+# 보안점검 메인 탭 (`02_main_tab`)
 
 - **대분류**: 보안점검 메인 탭
 - **pytest 마커**: `app_check`, `app_main` (전체) / `main_01` ~ `main_07` (중분류별 실행)
