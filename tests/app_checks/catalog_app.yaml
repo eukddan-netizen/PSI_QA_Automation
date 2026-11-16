@@ -1,6 +1,6 @@
 app_checks:
   - id: app_01
-    folder: 01_tray_menu
+    folder: 01_트레이아이콘
     title: 트레이 아이콘
     marker: app_tray
     description: 트레이 아이콘 대분류 (내PC보안점검, 패치 현황, 사용자 정보 입력, 프로그램/폰트 목록 재확인, 업데이트, 정보 확인)
@@ -36,7 +36,7 @@ app_checks:
         tc_ids: ["7_0001"]
 
   - id: app_02
-    folder: 02_main_tab
+    folder: 02_메인화면
     title: 보안점검 메인 탭
     excel_rows: 20~34
     marker: app_main
@@ -68,35 +68,35 @@ app_checks:
         excel_rows: 33~34
 
   - id: app_03
-    folder: 03_inspection_tab
+    folder: 03_점검
     title: 점검 탭
     excel_rows: 38~40
     marker: app_inspection
     description: 실시간 점검 진행 항목 표시, 진행률(100%), 완료 후 결과 탭 자동 전환
 
   - id: app_04
-    folder: 04_inspection_result_tab
+    folder: 04_점검결과
     title: 점검결과 탭 공통 UI 및 정렬
     excel_rows: 66~71
     marker: app_result
     description: 방패/점수 및 카운트 무결성, 사용자 정보/서버 정책 정합성, 결과 테이블 헤더(번호, 점검 항목, 결과) 클릭 정렬 검증
 
   - id: app_05
-    folder: 05_history
+    folder: 05_점검이력
     title: 점검이력 탭 및 엑셀 내보내기
     excel_rows: 38~47
     marker: app_history
     description: 점검 이력 리스트, 상세 내역 토글/전체 펼치기, 엑셀 파일 저장 및 데이터 정합성 검증
 
   - id: app_06
-    folder: 06_pc_clean
+    folder: 06_PC정리
     title: PC정리 탭 및 시스템 정보 연동
     excel_rows: 48~58
     marker: app_clean
     description: OS버전/백신/방화벽 실시간 연동, 휴지통, %temp%, 브라우저 캐시 정리 및 실제 OS 삭제 검증
 
   - id: app_07
-    folder: 07_settings
+    folder: 07_설정
     title: 설정 탭 (일반/외형/정보)
     excel_rows: 59~65
     marker: app_settings

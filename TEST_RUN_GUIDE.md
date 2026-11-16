@@ -30,13 +30,13 @@
 | :--- | :--- | :--- | :--- |
 | `.\run app` | 프로그램 UI/기능 전체 | `app_check` | 전체 탭 일괄 실행 |
 | `.\run app list` | 대분류 목록 조회 | - | 탭별 명령어/마커 출력 |
-| `.\run 트레이` / `.\run tray` | `01_tray_menu` (트레이 아이콘) | `app_tray` | 중분류 1~7 전체 |
-| `.\run 메인` / `.\run main` | `02_main_tab` (보안점검 메인 탭) | `app_main` | 중분류 1~7 전체 |
-| `.\run 점검` / `.\run inspection` | `03_inspection_tab` (점검 탭) | `app_inspection` | 사용자 정보 / 실시간 진행 / 결과 전환 |
-| `.\run 점검결과` / `.\run result` | `04_inspection_result_tab` (점검결과 탭) | `app_result` | 방패/점수/정책정합성/카운트/정렬 |
-| `.\run 점검이력` / `.\run history` | `05_history` (점검이력 탭) | `app_history` | 이력 리스트 / 상세 / 엑셀 내보내기 |
-| `.\run PC정리` / `.\run clean` | `06_pc_clean` (PC정리 탭) | `app_clean` | OS/백신/방화벽/캐시 정리 |
-| `.\run 설정` / `.\run settings` | `07_settings` (설정 탭) | `app_settings` | 일반/외형/정보 |
+| `.\run 트레이` / `.\run tray` | `01_트레이아이콘` (트레이 아이콘) | `app_tray` | 중분류 1~7 전체 |
+| `.\run 메인` / `.\run main` | `02_메인화면` (보안점검 메인 탭) | `app_main` | 중분류 1~7 전체 |
+| `.\run 점검` / `.\run inspection` | `03_점검` (점검 탭) | `app_inspection` | 사용자 정보 / 실시간 진행 / 결과 전환 |
+| `.\run 점검결과` / `.\run result` | `04_점검결과` (점검결과 탭) | `app_result` | 방패/점수/정책정합성/카운트/정렬 |
+| `.\run 점검이력` / `.\run history` | `05_점검이력` (점검이력 탭) | `app_history` | 이력 리스트 / 상세 / 엑셀 내보내기 |
+| `.\run PC정리` / `.\run clean` | `06_PC정리` (PC정리 탭) | `app_clean` | OS/백신/방화벽/캐시 정리 |
+| `.\run 설정` / `.\run settings` | `07_설정` (설정 탭) | `app_settings` | 일반/외형/정보 |
 
 #### 중분류 / 세부 테스트 필터링 예시
 ```powershell
@@ -91,8 +91,8 @@
 .\.venv\Scripts\pytest.exe -m "app_inspection or app_result" -s
 
 # 3. 특정 파일 또는 특정 테스트 함수 직접 지정
-.\.venv\Scripts\pytest.exe tests/app_checks/03_inspection_tab/test_inspection_progress.py -s
-.\.venv\Scripts\pytest.exe tests/app_checks/03_inspection_tab/test_inspection_progress.py -k "user_info" -s
+.\.venv\Scripts\pytest.exe tests/app_checks/03_점검/test_inspection_progress.py -s
+.\.venv\Scripts\pytest.exe tests/app_checks/03_점검/test_inspection_progress.py -k "user_info" -s
 
 # 4. 실패한 테스트만 재실행 (--lf: last-failed) 또는 첫 실패 시 즉시 중단 (-x)
 .\.venv\Scripts\pytest.exe -m app_check --lf -s

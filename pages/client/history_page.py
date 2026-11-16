@@ -419,7 +419,41 @@ class HistoryPage(MainPage):
 
     @staticmethod
     def _find_filename_edit_and_save_btn(dlg_hwnd: int):
-        """#32770 다이얼로그에서 파일명 입력 Edit 및 저장 버튼을 UIA로 탐색합니다."""
+        """
+        #32770 다이얼로그에서 파일명 입력 Edit 및 저장 버튼을 탐색합니다.
+        UIA 백엔드의 COM 인터페이스 충돌(0x80040155, 0x8001010d fatal exception 콘솔 덤프)을
+        방지하기 위해 표준 win32 백엔드를 우선 사용합니다.
+        """
+        try:
+            dlg_app = Application(backend="win32").connect(handle=dlg_hwnd)
+            dlg_win = dlg_app.window(handle=dlg_hwnd)
+
+            filename_edit = None
+            # standard win32 File Dialog Edit control (id 1148 or 1001 or class Edit)
+            for ctrl in dlg_win.children(class_name="Edit"):
+                ctrl_id = ctrl.control_id()
+                if ctrl_id in (1148, 1001) or "Edit" in ctrl.friendly_class_name():
+                    filename_edit = ctrl
+                    break
+            if filename_edit is None:
+                edits = dlg_win.children(class_name="Edit")
+                if edits:
+                    filename_edit = edits[0]
+
+            save_btn = None
+            for bt in dlg_win.children(class_name="Button"):
+                bt_text = (bt.window_text() or "").strip()
+                bt_id = bt.control_id()
+                if bt_id == 1 or bt_text in ("저장(&S)", "저장(S)", "저장", "&Save", "Save"):
+                    save_btn = bt
+                    break
+
+            if filename_edit is not None and save_btn is not None:
+                return dlg_win, filename_edit, save_btn
+        except Exception:
+            pass
+
+        # Fallback to UIA if win32 lookup fails
         dlg_app = Application(backend="uia").connect(handle=dlg_hwnd)
         dlg_win = dlg_app.window(handle=dlg_hwnd)
 
@@ -427,7 +461,7 @@ class HistoryPage(MainPage):
         for ed in dlg_win.descendants(control_type="Edit"):
             ed_name = (ed.element_info.name or "").strip()
             ed_aid = (ed.element_info.automation_id or "").strip()
-            if "파일 이름" in ed_name or "File name" in ed_name or ed_aid == "1001":
+            if "파일 이름" in ed_name or "File name" in ed_name or ed_aid in ("1001", "1148"):
                 if "주소" not in ed_name:
                     filename_edit = ed
                     break
@@ -482,7 +516,10 @@ class HistoryPage(MainPage):
             filename_edit.set_edit_text(str(save_path))
             time.sleep(0.3)
 
-            save_btn.invoke()
+            try:
+                save_btn.click()
+            except Exception:
+                save_btn.invoke()
         except PermissionError:
             raise
         except Exception as exc:
