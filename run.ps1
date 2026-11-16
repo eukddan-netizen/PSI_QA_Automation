@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Position = 0)]
     $Target,
     [Parameter(Position = 1)]
@@ -40,7 +40,7 @@ if ([string]::IsNullOrWhiteSpace($Target)) {
     exit 0
 }
 
-if ($Target -eq "tray" -or $Target -eq "트레이") {
+if ($Target -eq "tray" -or $Target -eq "트레이" -or $Target -eq "트레이아이콘") {
     if (-not $IsElevated -and ($SubTarget -in "2", "3", "4", "5", "7" -or [string]::IsNullOrWhiteSpace($SubTarget) -or $SubTarget -match "[23457]")) {
         Write-Host ">>> [참고] 트레이 우클릭 메뉴(2, 3, 4, 5, 7번)는 상위 보안 프로세스(taAssistant) 제어를 위해 '관리자 권한으로 실행한 PowerShell'이 권장됩니다." -ForegroundColor Yellow
     }
@@ -95,7 +95,7 @@ if ($Target -match "^tray_?(\d+)$") {
     exit $LASTEXITCODE
 }
 
-if ($Target -eq "main" -or $Target -eq "메인") {
+if ($Target -eq "main" -or $Target -eq "메인" -or $Target -eq "메인화면") {
     if ([string]::IsNullOrWhiteSpace($SubTarget)) {
         Write-Host "[실행] 보안점검 메인 탭 대분류 전체(중분류 01~07) 순차 실행 중..." -ForegroundColor Green
         & $VenvPytest -m app_main -s
@@ -150,8 +150,8 @@ if ($Target -match "^main_?(\d+)$") {
 if ($Target -eq "app") {
     if ($SubTarget -eq "list") {
         Write-Host "[프로그램 UI/기능 점검(app_checks) 대분류 목록]" -ForegroundColor Cyan
-        Write-Host "  tray        (app_tray)       : 01_트레이아이콘           (트레이 아이콘, 중분류 1~7)"
-        Write-Host "  main        (app_main)       : 02_메인화면               (메인 탭, 중분류 1~7)"
+        Write-Host "  tray        (app_tray)       : 01_트레이                 (트레이 아이콘, 중분류 1~7)"
+        Write-Host "  main        (app_main)       : 02_메인                   (메인 탭, 중분류 1~7)"
         Write-Host "  inspection  (app_inspection) : 03_점검                   (점검 탭)"
         Write-Host "  result      (app_result)     : 04_점검결과               (점검결과 탭)"
         Write-Host "  history     (app_history)    : 05_점검이력               (점검이력 탭)"

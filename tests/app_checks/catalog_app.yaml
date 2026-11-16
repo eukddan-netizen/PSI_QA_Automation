@@ -1,6 +1,6 @@
 app_checks:
   - id: app_01
-    folder: 01_트레이아이콘
+    folder: 01_트레이
     title: 트레이 아이콘
     marker: app_tray
     description: 트레이 아이콘 대분류 (내PC보안점검, 패치 현황, 사용자 정보 입력, 프로그램/폰트 목록 재확인, 업데이트, 정보 확인)
@@ -36,7 +36,7 @@ app_checks:
         tc_ids: ["7_0001"]
 
   - id: app_02
-    folder: 02_메인화면
+    folder: 02_메인
     title: 보안점검 메인 탭
     excel_rows: 20~34
     marker: app_main
