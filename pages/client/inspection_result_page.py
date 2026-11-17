@@ -197,33 +197,48 @@ class InspectionResultPage:
 
         return rows
 
-    def click_table_header(self, header_name: str) -> None:
-        """점검결과 테이블의 정렬 가능 컬럼 헤더('번호', '점검 항목', '결과') 클릭"""
+    def click_table_header(self, header_name: str, timeout: float = 5.0) -> None:
+        """점검결과 테이블의 정렬 가능 컬럼 헤더('번호', '점검 항목', '결과') 클릭 및 정렬 반영 대기"""
         self.bring_to_front()
+        before_rows = self.get_all_result_rows()
+        before_sig = [(r["no"], r["status"]) for r in before_rows]
+
         win = self._get_app_window()
+        clicked = False
         for d in win.descendants(control_type="DataItem"):
             cls = d.element_info.class_name or ""
             name = (d.element_info.name or "").strip()
             if name == header_name and "sortable" in cls:
                 print(f">>> [ResultPage] 테이블 '{header_name}' 헤더 클릭")
                 self._click_element(d)
-                time.sleep(0.6)
-                return
-
-        raise RuntimeError(f"점검결과 테이블에서 '{header_name}' 정렬 헤더를 찾을 수 없습니다.")
-
-    def navigate_to_results(self):
-        """사이드바의 '점검결과' 메뉴 클릭"""
-        win = self._get_app_window()
-        for link in win.descendants(control_type="Hyperlink"):
-            if link.element_info.name == "점검결과":
-                print(">>> [ResultPage] '점검결과' 메뉴 클릭")
-                try:
-                    link.invoke()
-                except Exception:
-                    self._click_element(link)
-                time.sleep(2.0)
+                clicked = True
                 break
+
+        if not clicked:
+            raise RuntimeError(f"점검결과 테이블에서 '{header_name}' 정렬 헤더를 찾을 수 없습니다.")
+
+        if len(before_sig) <= 1:
+            return
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            cur_sig = [(r["no"], r["status"]) for r in self.get_all_result_rows()]
+            if cur_sig != before_sig:
+                return
+            time.sleep(0.15)
+
+    def navigate_to_results(self, timeout: float = 12.0):
+        """사이드바의 '점검결과' 메뉴 클릭 및 결과 테이블 렌더링 완료 대기"""
+        if self.get_active_tab_name() != "점검결과":
+            win = self._get_app_window()
+            for link in win.descendants(control_type="Hyperlink"):
+                if link.element_info.name == "점검결과":
+                    print(">>> [ResultPage] '점검결과' 메뉴 클릭")
+                    try:
+                        link.invoke()
+                    except Exception:
+                        self._click_element(link)
+                    break
+        self.wait_for_result_ready(timeout=timeout)
 
     def get_summary_stats(self) -> Dict[str, Any]:
         """
@@ -338,16 +353,23 @@ class InspectionResultPage:
         win32gui.PostMessage(target_h, win32con.WM_LBUTTONUP, 0, lParam)
 
     def click_remediate_button_for_item(
-        self, item_name: str = "화면 보호기", check_num: Optional[int] = None
+        self, item_name: str = "화면 보호기", check_num: Optional[int] = None, timeout: float = 10.0
     ) -> bool:
-        """특정 항목의 '조치' 버튼 클릭"""
+        """특정 항목의 '조치' 버튼 클릭 후 UI 상태('안전' 전환 등) 반영 대기"""
         status, btn = self.get_item_info(item_name=item_name, check_num=check_num)
         label = f"{check_num}번({item_name})" if check_num else item_name
         print(f">>> [ResultPage] '{label}' 현재 진단 상태: {status}")
         if btn and btn.element_info.name == "조치":
             print(f">>> [ResultPage] '{label}' '조치' 버튼 발견! 클릭 실행: {btn.rectangle()}")
             self._click_element(btn)
-            time.sleep(2.5)  # 조치 적용 및 UI 실시간 반영 대기
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                new_status, new_btn = self.get_item_info(item_name=item_name, check_num=check_num)
+                new_btn_name = new_btn.element_info.name if new_btn else None
+                if new_status != status or new_btn_name != "조치":
+                    time.sleep(0.3)
+                    return True
+                time.sleep(0.25)
             return True
         else:
             print(
@@ -410,7 +432,20 @@ class InspectionResultPage:
                                 b.invoke()
                             except Exception:
                                 self._click_element(b)
-                            time.sleep(0.25)
+                            close_deadline = time.time() + 3.0
+                            while time.time() < close_deadline:
+                                try:
+                                    win_chk = self._get_app_window()
+                                    chk_texts = [
+                                        (t.element_info.name or "").strip()
+                                        for t in win_chk.descendants(control_type="Text")
+                                        if t.element_info.name
+                                    ]
+                                    if "・진단결과" not in chk_texts:
+                                        break
+                                except Exception:
+                                    pass
+                                time.sleep(0.15)
                             break
                     break
             except (KeyError, Exception):
@@ -419,15 +454,31 @@ class InspectionResultPage:
 
         return diag_text
 
-    def click_reinspect(self):
-        """결과 화면 하단의 '재점검' 버튼 클릭"""
+    def click_reinspect(self, timeout: float = 25.0):
+        """결과 화면 하단의 '재점검' 버튼 클릭 후 재점검 완료 및 결과 탭 복귀 대기"""
         win = self._get_app_window()
+        clicked = False
         for btn in win.descendants(control_type="Button"):
             if "재점검" in (btn.element_info.name or ""):
                 print(">>> [ResultPage] '재점검' 버튼 클릭!")
                 self._click_element(btn)
-                time.sleep(10.0)  # 재점검 수행 대기
+                clicked = True
                 break
+
+        if not clicked:
+            raise RuntimeError("점검결과 화면에서 '재점검' 버튼을 찾을 수 없습니다.")
+
+        deadline = time.time() + timeout
+        saw_inspection = False
+        while time.time() < deadline:
+            active = self.get_active_tab_name()
+            if active == "점검":
+                saw_inspection = True
+            elif active == "점검결과" and (saw_inspection or time.time() + timeout - deadline > 1.0):
+                self.wait_for_result_ready(timeout=12.0)
+                return
+            time.sleep(0.2)
+        raise TimeoutError("재점검 실행 후 '점검결과' 탭 복귀 대기 시간 초과")
 
     @staticmethod
     def verify_common_remediation_metrics(before_stats: Dict[str, Any], after_stats: Dict[str, Any]) -> None:

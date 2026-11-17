@@ -174,21 +174,26 @@ class PasswordSafetyModalPage:
                 return d
         raise RuntimeError("눈 아이콘(pw-toggle) 버튼을 찾을 수 없습니다.")
 
-    def clear_password(self) -> None:
-        """입력창 텍스트 전체 삭제"""
+    def clear_password(self, timeout: float = 2.0) -> None:
+        """입력창 텍스트 전체 삭제 및 초기화 반영 대기"""
         edit = self._get_edit_control()
         r = edit.rectangle()
         mouse.click(coords=(r.left + 50, r.top + 20))
-        time.sleep(0.2)
+        time.sleep(0.15)
         keyboard.send_keys("^a{BACKSPACE}")
-        time.sleep(0.3)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            checklist = self.get_checklist_status()
+            if checklist and not any(checklist.values()):
+                return
+            time.sleep(0.1)
 
     def type_password(self, pwd: str) -> None:
         """암호 입력 필드에 키보드로 텍스트 입력"""
         self.clear_password()
         if pwd:
             keyboard.send_keys(pwd, with_spaces=True)
-            time.sleep(0.4)
+            time.sleep(0.2)
 
     def paste_text(self, text: str) -> None:
         """클립보드를 통해 한글 또는 특수 텍스트 붙여넣기"""
@@ -198,7 +203,7 @@ class PasswordSafetyModalPage:
         win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
         win32clipboard.CloseClipboard()
         keyboard.send_keys("^v")
-        time.sleep(0.4)
+        time.sleep(0.2)
 
     def is_password_visible(self) -> bool:
         """
@@ -209,15 +214,21 @@ class PasswordSafetyModalPage:
         eye_btn = self._get_eye_button()
         return (eye_btn.element_info.name or "").strip() == "Hide password"
 
-    def toggle_password_visibility(self) -> bool:
+    def toggle_password_visibility(self, timeout: float = 4.0) -> bool:
         """
-        눈 아이콘 버튼을 클릭하여 보임/숨김 토글 후, 변경된 상태(보임: True / 숨김: False) 반환
+        눈 아이콘 버튼을 클릭하여 보임/숨김 토글 후, 변경된 상태(보임: True / 숨김: False)까지 대기 후 반환
         """
         eye_btn = self._get_eye_button()
         before_state = self.is_password_visible()
         print(f">>> [PasswordSafetyModal] 눈 아이콘 클릭 (현재 보이는 상태: {before_state})")
         eye_btn.click_input()
-        time.sleep(0.3)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            after_state = self.is_password_visible()
+            if after_state != before_state:
+                print(f">>> [PasswordSafetyModal] 눈 아이콘 클릭 후 보이는 상태: {after_state}")
+                return after_state
+            time.sleep(0.1)
         after_state = self.is_password_visible()
         print(f">>> [PasswordSafetyModal] 눈 아이콘 클릭 후 보이는 상태: {after_state}")
         return after_state

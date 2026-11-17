@@ -177,8 +177,8 @@ class CleanPage(MainPage):
         _, cb = self._find_checkbox(name)
         return int(cb.get_toggle_state())
 
-    def set_checkbox(self, name: str, checked: bool) -> None:
-        """체크박스를 원하는 선택 상태(True/False)로 설정"""
+    def set_checkbox(self, name: str, checked: bool, timeout: float = 4.0) -> None:
+        """체크박스를 원하는 선택 상태(True/False)로 설정하고 반영까지 대기"""
         current = self.get_checkbox_state(name)
         target_state = 1 if checked else 0
         if current == target_state:
@@ -186,13 +186,20 @@ class CleanPage(MainPage):
 
         target_h, cb = self._find_checkbox(name)
         self._click_element(cb, target_h)
-        time.sleep(0.25)
 
-        # 일부선택(2) 상태에서 클릭했을 때 전체선택(1)이 되는 경우 한 번 더 클릭하여 해제
-        if not checked and self.get_checkbox_state(name) != 0:
-            target_h, cb = self._find_checkbox(name)
-            self._click_element(cb, target_h)
-            time.sleep(0.25)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            state = self.get_checkbox_state(name)
+            if state == target_state:
+                return
+            # 일부선택(2) 상태에서 클릭했을 때 전체선택(1)이 되는 경우 한 번 더 클릭하여 해제
+            if not checked and state == 1 and current == 2:
+                target_h, cb = self._find_checkbox(name)
+                self._click_element(cb, target_h)
+                current = 1
+            time.sleep(0.15)
+
+        raise TimeoutError(f"'{name}' 체크박스 상태 변경({target_state}) 대기 시간 초과 (현재: {self.get_checkbox_state(name)})")
 
     def uncheck_all(self) -> None:
         """모든 정리 항목 체크박스를 해제 상태로 초기화"""
@@ -254,20 +261,28 @@ class CleanPage(MainPage):
         raise TimeoutError("'정리가 완료되었습니다!' 완료 모달이 표시되지 않았습니다.")
 
     def close_complete_modal(self, timeout: float = 5.0) -> None:
-        """완료 모달에서 '확인' 버튼 클릭"""
+        """완료 모달에서 '확인' 버튼 클릭 및 모달 닫힘 대기"""
         deadline = time.time() + timeout
+        clicked = False
         while time.time() < deadline:
             target_h, win = self._connect_window()
-            for b in win.descendants(control_type="Button"):
-                if (b.element_info.name or "").strip() == "확인":
-                    try:
-                        b.invoke()
-                    except Exception:
-                        self._click_element(b, target_h)
-                    time.sleep(0.3)
+            if not clicked:
+                for b in win.descendants(control_type="Button"):
+                    if (b.element_info.name or "").strip() == "확인":
+                        try:
+                            b.invoke()
+                        except Exception:
+                            self._click_element(b, target_h)
+                        clicked = True
+                        break
+            else:
+                texts = {(t.element_info.name or "").strip() for t in win.descendants(control_type="Text")}
+                if "정리가 완료되었습니다!" not in texts:
                     return
-            time.sleep(0.2)
-        raise TimeoutError("완료 모달에서 '확인' 버튼을 찾을 수 없습니다.")
+            time.sleep(0.15)
+        if not clicked:
+            raise TimeoutError("완료 모달에서 '확인' 버튼을 찾을 수 없습니다.")
+        raise TimeoutError("완료 모달이 '확인' 클릭 후 닫히지 않았습니다.")
 
     def run_clean_for_items(self, item_names: List[str], timeout: float = 15.0) -> None:
         """지정한 항목들만 체크한 뒤 '정리하기' -> '정리 진행' -> 완료 '확인'까지 일괄 실행"""

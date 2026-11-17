@@ -370,9 +370,13 @@ class HistoryPage(MainPage):
             i += 1
         return items
 
-    def click_item_accordion(self, item_no: int) -> None:
-        """지정 번호(item_no)의 아코디언 헤더를 클릭하여 개별 항목을 열거나 닫습니다."""
+    def click_item_accordion(self, item_no: int, timeout: float = 5.0) -> None:
+        """지정 번호(item_no)의 아코디언 헤더를 클릭하여 개별 항목을 열고 닫히거나 열릴 때까지 대기합니다."""
+        before_items = {it["no"]: it["is_open"] for it in self.get_detail_items() if it["no"] is not None}
+        before_open = before_items.get(item_no)
+
         target_h, win = self._connect_window()
+        clicked = False
         desc = list(win.descendants())
         for i, elem in enumerate(desc):
             if elem.element_info.control_type == "Group" and "accordion-header" in (elem.element_info.class_name or ""):
@@ -381,10 +385,25 @@ class HistoryPage(MainPage):
                         if (desc[j].element_info.name or "").strip() == str(item_no):
                             print(f">>> [HistoryPage] {item_no}번 아코디언 헤더 클릭...")
                             self._click_element(elem, target_h)
-                            time.sleep(0.4)
-                            return
+                            clicked = True
+                            break
                         break
-        raise RuntimeError(f"'점검 상세 내역'에서 {item_no}번 아코디언 항목을 찾을 수 없습니다.")
+            if clicked:
+                break
+        if not clicked:
+            raise RuntimeError(f"'점검 상세 내역'에서 {item_no}번 아코디언 항목을 찾을 수 없습니다.")
+
+        if before_open is None:
+            time.sleep(0.4)
+            return
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            cur_items = {it["no"]: it["is_open"] for it in self.get_detail_items() if it["no"] is not None}
+            if cur_items.get(item_no) is not None and cur_items[item_no] != before_open:
+                return
+            time.sleep(0.15)
+        raise TimeoutError(f"{item_no}번 아코디언 상태 전환 대기 시간 초과")
 
     def click_excel_export_icon(self) -> None:
         """'점검 상세 내역' 우측 상단의 엑셀(Microsoft Excel) 아이콘을 클릭합니다."""
@@ -531,41 +550,41 @@ class HistoryPage(MainPage):
                 ) from exc
             raise
 
-        # 혹시 덮어쓰기 확인(#32770) 창이 뜬 경우 '예' 처리
-        time.sleep(0.5)
-        overwrite_hwnd = 0
-
-        def _ow_cb(h, _):
-            nonlocal overwrite_hwnd
-            if h != dlg_hwnd and win32gui.IsWindowVisible(h) and win32gui.GetClassName(h) == "#32770":
-                if "확인" in (win32gui.GetWindowText(h) or ""):
-                    overwrite_hwnd = h
-
-        win32gui.EnumWindows(_ow_cb, None)
-        if overwrite_hwnd:
-            ow_app = Application(backend="uia").connect(handle=overwrite_hwnd)
-            ow_win = ow_app.window(handle=overwrite_hwnd)
-            for bt in ow_win.descendants(control_type="Button"):
-                if (bt.element_info.name or "").strip() in ("예(Y)", "예", "Yes"):
-                    bt.invoke()
-                    break
-
-        # 저장 다이얼로그 닫힘 대기
+        # 저장 다이얼로그 닫힘 대기 (덮어쓰기 확인 창 동시 감시)
         close_deadline = time.time() + timeout
+        handled_overwrite = False
         while time.time() < close_deadline:
             if not win32gui.IsWindow(dlg_hwnd) or not win32gui.IsWindowVisible(dlg_hwnd):
-                break
+                return {
+                    "default_filename": default_filename,
+                    "saved_path": save_path,
+                }
+            if not handled_overwrite:
+                overwrite_hwnd = 0
+
+                def _ow_cb(h, _):
+                    nonlocal overwrite_hwnd
+                    if h != dlg_hwnd and win32gui.IsWindowVisible(h) and win32gui.GetClassName(h) == "#32770":
+                        if "확인" in (win32gui.GetWindowText(h) or ""):
+                            overwrite_hwnd = h
+
+                win32gui.EnumWindows(_ow_cb, None)
+                if overwrite_hwnd:
+                    ow_app = Application(backend="uia").connect(handle=overwrite_hwnd)
+                    ow_win = ow_app.window(handle=overwrite_hwnd)
+                    for bt in ow_win.descendants(control_type="Button"):
+                        if (bt.element_info.name or "").strip() in ("예(Y)", "예", "Yes"):
+                            bt.invoke()
+                            handled_overwrite = True
+                            break
             time.sleep(0.2)
 
-        return {
-            "default_filename": default_filename,
-            "saved_path": save_path,
-        }
+        raise TimeoutError("저장 다이얼로그(#32770)가 제한 시간 내에 닫히지 않았습니다.")
 
     def wait_for_excel_save_popup(self, timeout: float = 8.0) -> str:
         """
         엑셀 저장 완료 팝업('"점검 내역을 엑셀 파일로 저장했습니다."')을 감지해
-        메시지를 반환하고 '확인' 버튼을 클릭하여 닫습니다.
+        메시지를 반환하고 '확인' 버튼을 클릭한 뒤 팝업이 닫힐 때까지 대기합니다.
         """
         deadline = time.time() + timeout
         while time.time() < deadline:
@@ -583,7 +602,17 @@ class HistoryPage(MainPage):
                     if (b.element_info.name or "").strip() == "확인":
                         print(f">>> [HistoryPage] 엑셀 저장 완료 팝업 확인 클릭: {msg!r}")
                         self._click_element(b, target_h)
-                        time.sleep(0.4)
+                        close_dl = time.time() + 3.0
+                        while time.time() < close_dl:
+                            _, win_chk = self._connect_window()
+                            chk_texts = [
+                                (t.element_info.name or "").strip()
+                                for t in win_chk.descendants(control_type="Text")
+                                if t.element_info.name
+                            ]
+                            if not any("엑셀" in t and "저장" in t for t in chk_texts):
+                                break
+                            time.sleep(0.15)
                         return msg
 
             # 2. Win32 #32770 알림 팝업 fallback 확인
@@ -613,10 +642,15 @@ class HistoryPage(MainPage):
                 for bt in p_win.descendants(control_type="Button"):
                     if (bt.element_info.name or "").strip() in ("확인", "OK"):
                         bt.invoke()
+                        close_dl = time.time() + 3.0
+                        while time.time() < close_dl:
+                            if not win32gui.IsWindow(popup_hwnd) or not win32gui.IsWindowVisible(popup_hwnd):
+                                break
+                            time.sleep(0.15)
                         break
                 return "\n".join(msg_parts)
 
-            time.sleep(0.25)
+            time.sleep(0.2)
 
         raise TimeoutError("엑셀 저장 완료 팝업('점검 내역을 엑셀 파일로 저장했습니다.')이 나타나지 않았습니다.")
 

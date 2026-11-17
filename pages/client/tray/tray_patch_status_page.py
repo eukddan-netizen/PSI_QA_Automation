@@ -151,8 +151,8 @@ class TrayPatchStatusPage:
 
         return summary_by_type, installed_patches
 
-    def close(self) -> bool:
-        """하단 [확인] 버튼을 클릭하여 창 닫기 (실패 시 MSAA 닫기 폴백)"""
+    def close(self, timeout: float = 4.0) -> bool:
+        """하단 [확인] 버튼을 클릭하여 창 닫기 및 종료 대기 (실패 시 MSAA 닫기 폴백)"""
         if not self.hwnd or not win32gui.IsWindow(self.hwnd):
             return True
 
@@ -161,7 +161,11 @@ class TrayPatchStatusPage:
                 for b in self.win.descendants(control_type="Button"):
                     if (b.element_info.name or "").strip() == "확인":
                         b.invoke()
-                        time.sleep(0.6)
+                        deadline = time.time() + min(timeout, 2.5)
+                        while time.time() < deadline:
+                            if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
+                                return True
+                            time.sleep(0.15)
                         break
         except Exception:
             pass

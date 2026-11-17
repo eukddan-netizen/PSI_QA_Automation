@@ -185,22 +185,54 @@ class HelpModalPage:
 
         raise TimeoutError("도움말 모달 창이 제한 시간 내에 열리지 않았습니다.")
 
+    def _get_chrome_widget_hwnd(self) -> Optional[int]:
+        """도움말 창 내부 최상위 Chrome_WidgetWin_1 핸들 탐색"""
+        widget_h = None
+
+        def cb_child(ch, _):
+            nonlocal widget_h
+            if widget_h is None and "Chrome_WidgetWin_1" in win32gui.GetClassName(ch):
+                widget_h = ch
+
+        win32gui.EnumChildWindows(self.hwnd, cb_child, None)
+        return widget_h
+
     def _get_target_hwnd(self) -> int:
         """도움말 창 내부 Chrome_WidgetWin_1 또는 Chrome_RenderWidgetHostHWND 핸들 탐색"""
         target_h = None
+
         def cb_child(ch, _):
             nonlocal target_h
             cls_name = win32gui.GetClassName(ch)
             if "Chrome_WidgetWin_1" in cls_name or "Chrome_Render" in cls_name:
                 target_h = ch
+
         win32gui.EnumChildWindows(self.hwnd, cb_child, None)
         return target_h or self.hwnd
 
-    def _connect_window(self):
-        """pywinauto UIA 윈도우 객체 및 내부 크롬 HWND 반환"""
-        target_h = self._get_target_hwnd()
+    def _connect_window(self, handle: Optional[int] = None):
+        """pywinauto UIA 윈도우 객체 및 대상 HWND 반환"""
+        target_h = handle or self._get_target_hwnd()
         app = Application(backend="uia").connect(handle=target_h)
         return target_h, app.window(handle=target_h)
+
+    def _click_element(self, elem, target_h: Optional[int] = None) -> None:
+        """
+        물리 마우스 이동(SetCursorPos) 없이 PostMessage로 요소를 클릭합니다.
+        PostMessage가 실패할 경우에만 click_input()으로 폴백합니다.
+        """
+        click_hwnd = target_h or self._get_target_hwnd()
+        try:
+            rect = elem.rectangle()
+            cx = (rect.left + rect.right) // 2
+            cy = (rect.top + rect.bottom) // 2
+            local_x, local_y = win32gui.ScreenToClient(click_hwnd, (cx, cy))
+            l_param = ((local_y & 0xFFFF) << 16) | (local_x & 0xFFFF)
+            win32gui.PostMessage(click_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, l_param)
+            time.sleep(0.08)
+            win32gui.PostMessage(click_hwnd, win32con.WM_LBUTTONUP, 0, l_param)
+        except Exception:
+            elem.click_input()
 
     def is_open(self) -> bool:
         """도움말 창이 현재 열려 있고 화면에 표시 중인지 확인"""
@@ -208,9 +240,41 @@ class HelpModalPage:
 
     def bring_to_front(self) -> None:
         """도움말 창을 포커스 활성화"""
-        from core.desktop_utils import bring_window_to_front
+        from core.desktop_utils import bring_window_to_front, switch_to_user_desktop
+        switch_to_user_desktop()
         if bring_window_to_front(self.hwnd):
             time.sleep(0.3)
+
+    def _find_close_button(self) -> Tuple[Optional[int], Optional[Any]]:
+        """
+        도움말 창 우측 상단의 닫기(X) 버튼을 Chrome_WidgetWin_1 / 대상 웹뷰 / 최상위 창 순으로 탐색합니다.
+        """
+        search_handles: List[int] = []
+        for h in (self._get_chrome_widget_hwnd(), self._get_target_hwnd(), self.hwnd):
+            if h and h not in search_handles and win32gui.IsWindow(h):
+                search_handles.append(h)
+
+        for handle in search_handles:
+            try:
+                _, win = self._connect_window(handle=handle)
+                win_rect = win.rectangle()
+                top_bar_bottom = win_rect.top + 80
+
+                candidate_btns = []
+                for b in win.descendants(control_type="Button"):
+                    r = b.rectangle()
+                    if r.width() <= 0 or r.height() <= 0:
+                        continue
+                    if r.top < top_bar_bottom and r.right > win_rect.right - 150:
+                        candidate_btns.append(b)
+
+                if candidate_btns:
+                    close_btn = max(candidate_btns, key=lambda btn: btn.rectangle().right)
+                    return handle, close_btn
+            except Exception:
+                continue
+
+        return None, None
 
     def close(self, timeout: float = 5.0) -> bool:
         """우측 상단 닫기(X) 버튼을 클릭하여 도움말 창 닫기"""
@@ -218,26 +282,29 @@ class HelpModalPage:
             return True
 
         self.bring_to_front()
-        target_h, win = self._connect_window()
-        win_rect = win.rectangle()
-        top_bar_bottom = win_rect.top + 70
+        click_hwnd, close_btn = self._find_close_button()
 
-        candidate_btns = []
-        for b in win.descendants(control_type="Button"):
-            r = b.rectangle()
-            if r.top < top_bar_bottom and r.right > win_rect.right - 120:
-                candidate_btns.append(b)
-
-        if candidate_btns:
-            close_btn = max(candidate_btns, key=lambda btn: btn.rectangle().right)
+        if close_btn is not None:
             print(f">>> [HelpModalPage] 도움말 창 닫기(X) 버튼 클릭: {close_btn.rectangle()}")
             try:
                 close_btn.invoke()
             except Exception:
-                close_btn.click_input()
+                self._click_element(close_btn, click_hwnd)
         else:
-            # Fallback: WM_CLOSE
-            win32gui.PostMessage(self.hwnd, win32con.WM_CLOSE, 0, 0)
+            # Fallback: WM_CLOSE / SC_CLOSE
+            target_h = self._get_chrome_widget_hwnd() or self._get_target_hwnd()
+            sent = False
+            for h in (self.hwnd, target_h):
+                if not h or not win32gui.IsWindow(h):
+                    continue
+                try:
+                    win32gui.PostMessage(h, win32con.WM_CLOSE, 0, 0)
+                    sent = True
+                    break
+                except Exception:
+                    continue
+            if not sent:
+                win32gui.PostMessage(self.hwnd, win32con.WM_SYSCOMMAND, win32con.SC_CLOSE, 0)
 
         start = time.time()
         while time.time() - start < timeout:
@@ -247,8 +314,9 @@ class HelpModalPage:
             time.sleep(0.25)
         return False
 
-    def toggle_hamburger_menu(self) -> None:
-        """좌측 상단 햄버거 메뉴(☰) 버튼 클릭 (접힘/펼침 토글)"""
+    def toggle_hamburger_menu(self, timeout: float = 5.0) -> None:
+        """좌측 상단 햄버거 메뉴(☰) 버튼 클릭 후 네비게이션 접힘/펼침 상태 전환 대기"""
+        before_collapsed = self.is_nav_collapsed()
         target_h, win = self._connect_window()
         menu_btn = None
         for b in win.descendants(control_type="Button"):
@@ -265,9 +333,15 @@ class HelpModalPage:
         try:
             menu_btn.invoke()
         except Exception:
-            # Fallback: pywinauto click_input
-            menu_btn.click_input()
-        time.sleep(0.8)
+            self._click_element(menu_btn, target_h)
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.is_nav_collapsed() != before_collapsed:
+                time.sleep(0.25)
+                return
+            time.sleep(0.15)
+        raise TimeoutError("햄버거 메뉴(☰) 클릭 후 네비바 상태가 변경되지 않았습니다.")
 
     def is_nav_collapsed(self) -> bool:
         """
@@ -305,11 +379,10 @@ class HelpModalPage:
             if "lg-link" in (d.element_info.class_name or "")
         ]
 
-    def select_item(self, target: Union[int, str]) -> str:
+    def select_item(self, target: Union[int, str], timeout: float = 5.0) -> str:
         """
-        지정 번호(1~53) 또는 항목명으로 도움말 항목 선택
+        지정 번호(1~53) 또는 항목명으로 도움말 항목 선택 후 우측 본문/헤더 반영 대기
         """
-        _, win = self._connect_window()
         links = self.get_item_links()
         if not links:
             raise RuntimeError("도움말 항목 리스트를 찾을 수 없습니다.")
@@ -334,8 +407,15 @@ class HelpModalPage:
         try:
             target_link.invoke()
         except Exception:
-            target_link.click_input()
-        time.sleep(0.4)
+            self._click_element(target_link)
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            header = self.get_header_title()
+            if header == item_name or item_name in header:
+                if self.get_content_texts():
+                    return item_name
+            time.sleep(0.15)
         return item_name
 
     def get_header_title(self) -> str:
@@ -376,9 +456,9 @@ class HelpModalPage:
                 })
         return buttons
 
-    def toggle_accordion(self, button_label_or_index: Union[int, str]) -> Tuple[str, str]:
+    def toggle_accordion(self, button_label_or_index: Union[int, str], timeout: float = 5.0) -> Tuple[str, str]:
         """
-        지정된 아코디언 버튼을 클릭하여 접힘/펼침 토글.
+        지정된 아코디언 버튼을 클릭하여 접힘/펼침 토글 후 상태 전환 완료까지 대기.
         (클릭 전 상태, 클릭 후 상태) 반환
         """
         btns = self.get_accordion_buttons()
@@ -404,16 +484,20 @@ class HelpModalPage:
         try:
             btn_elem.invoke()
         except Exception:
-            btn_elem.click_input()
-        time.sleep(0.5)
+            self._click_element(btn_elem)
 
-        # 클릭 후 상태 재확인
-        refreshed_btns = self.get_accordion_buttons()
-        after_state = "unknown"
-        for b in refreshed_btns:
-            if target_btn_info["label"] == b["label"]:
-                after_state = b["state"]
-                break
+        deadline = time.time() + timeout
+        after_state = before_state
+        while time.time() < deadline:
+            refreshed_btns = self.get_accordion_buttons()
+            for b in refreshed_btns:
+                if target_btn_info["label"] == b["label"]:
+                    after_state = b["state"]
+                    break
+            if after_state != before_state:
+                print(f">>> [HelpModalPage] 아코디언 토글 결과: {before_state} -> {after_state}")
+                return before_state, after_state
+            time.sleep(0.15)
 
         print(f">>> [HelpModalPage] 아코디언 토글 결과: {before_state} -> {after_state}")
         return before_state, after_state
@@ -431,11 +515,35 @@ class HelpModalPage:
                 texts.append(name)
         return texts
 
-    def change_language(self, target_lang: str) -> None:
+    def _is_language_applied(self, is_en: bool) -> bool:
+        """좌측 53개 도움말 항목이 목표 언어(영문/한글)로 반영되었는지 확인"""
+        cur_items = self.get_nav_items_texts()
+        if len(cur_items) == 53:
+            first = cur_items[0]
+            return first.isascii() if is_en else (not first.isascii())
+        return False
+
+    def _wait_language_applied(self, is_en: bool, wait_sec: float) -> bool:
+        """지정 시간 동안 목표 언어 반영 여부를 폴링 대기"""
+        deadline = time.time() + wait_sec
+        while time.time() < deadline:
+            if self._is_language_applied(is_en):
+                return True
+            time.sleep(0.2)
+        return False
+
+    def _post_key(self, target_h: int, vk_code: int) -> None:
+        """SendInput 없이 대상 창 핸들에 PostMessage로 단일 키 입력을 전송합니다."""
+        win32gui.PostMessage(target_h, win32con.WM_KEYDOWN, vk_code, 0)
+        time.sleep(0.05)
+        win32gui.PostMessage(target_h, win32con.WM_KEYUP, vk_code, 0)
+
+    def change_language(self, target_lang: str, timeout: float = 6.0) -> None:
         """
-        우측 상단 언어 선택 드롭다운(ComboBox)에서 언어 변경 ('English' 또는 '한국어')
+        우측 상단 언어 선택 드롭다운(ComboBox)에서 언어 변경 ('English' 또는 '한국어') 및 목록 반영 대기
         """
-        _, win = self._connect_window()
+        self.bring_to_front()
+        target_h, win = self._connect_window()
         combo = None
         for d in win.descendants(control_type="ComboBox"):
             combo = d
@@ -444,20 +552,45 @@ class HelpModalPage:
         if not combo:
             raise RuntimeError("우측 상단 언어 선택 드롭다운을 찾을 수 없습니다.")
 
+        is_en = target_lang.lower() in ("english", "en", "영어")
+        vk_arrow = win32con.VK_DOWN if is_en else win32con.VK_UP
+        arrow_key = "{DOWN}" if is_en else "{UP}"
         print(f">>> [HelpModalPage] 언어 변경 시작 -> '{target_lang}'")
-        combo.click_input()
-        time.sleep(0.3)
 
-        if target_lang.lower() in ("english", "en", "영어"):
-            # 드롭다운 아래 화살표로 'English' 선택
-            keyboard.send_keys("{DOWN}")
-            time.sleep(0.2)
+        # 이미 원하는 언어가 적용되어 있으면 즉시 반환
+        if self._is_language_applied(is_en):
+            print(f">>> [HelpModalPage] 이미 '{target_lang}' 상태입니다.")
+            return
+
+        # 1차: 물리 마우스/키보드(SetCursorPos/SendInput) 없이 PostMessage 클릭 + PostMessage 키 전송
+        try:
+            try:
+                combo.set_focus()
+            except Exception:
+                pass
+            self._click_element(combo, target_h)
+            time.sleep(0.25)
+            self._post_key(target_h, vk_arrow)
+            time.sleep(0.15)
+            self._post_key(target_h, win32con.VK_RETURN)
+            if self._wait_language_applied(is_en, min(3.0, timeout)):
+                print(f">>> [HelpModalPage] 언어 변경 완료 -> '{target_lang}'")
+                return
+        except Exception as e:
+            print(f">>> [HelpModalPage] PostMessage 언어 변경 시도 예외({e}) -> 폴백 진행")
+
+        # 2차: 실제 마우스 클릭 + keyboard.send_keys 폴백
+        try:
+            combo.click_input()
+            time.sleep(0.25)
+            keyboard.send_keys(arrow_key)
+            time.sleep(0.15)
             keyboard.send_keys("{ENTER}")
-        else:
-            # 드롭다운 위 화살표로 '한국어' 선택
-            keyboard.send_keys("{UP}")
-            time.sleep(0.2)
-            keyboard.send_keys("{ENTER}")
-        time.sleep(1.0)
-        print(f">>> [HelpModalPage] 언어 변경 완료 -> '{target_lang}'")
+            if self._wait_language_applied(is_en, timeout):
+                print(f">>> [HelpModalPage] 언어 변경 완료(click_input 폴백) -> '{target_lang}'")
+                return
+        except Exception as e:
+            print(f">>> [HelpModalPage] click_input 폴백 예외({e})")
+
+        raise TimeoutError(f"언어 변경('{target_lang}') 반영 대기 시간 초과")
 

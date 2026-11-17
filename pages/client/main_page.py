@@ -133,6 +133,29 @@ class MainPage:
         print(f">>> [MainPage] '▶ 점검 시작' 버튼 발견: Screen={start_btn.rectangle()}")
         self._click_element(start_btn, target_h)
         print(">>> [MainPage] '▶ 점검 시작' 클릭 메시지 전송 완료!")
+
+        # 클릭이 실제로 반응했는지 확인 ('점검'/'점검결과' 탭 전환 또는 버튼 상태 변화, 미반응 시 1회 재클릭)
+        confirm_deadline = time.time() + 2.5
+        while time.time() < confirm_deadline:
+            active = self.get_active_tab_name()
+            if active in ("점검", "점검결과"):
+                return True
+            _, win_chk = self._connect_window()
+            still_has_start = any(
+                "점검 시작" in (b.element_info.name or "") or "점검시작" in (b.element_info.name or "")
+                for b in win_chk.descendants(control_type="Button")
+            )
+            if not still_has_start:
+                return True
+            time.sleep(0.2)
+
+        # 미반응 시 1회 재시도
+        _, win_retry = self._connect_window()
+        for b in win_retry.descendants(control_type="Button"):
+            b_name = b.element_info.name or ""
+            if "점검 시작" in b_name or "점검시작" in b_name:
+                self._click_element(b, target_h)
+                break
         return True
 
     def _click_element(self, elem, hwnd):
@@ -147,11 +170,16 @@ class MainPage:
         time.sleep(0.08)
         win32gui.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, lParam)
 
-    def wait_for_inspection_done(self, timeout: int = 15):
-        """점검 진행 및 결과 로딩 대기"""
-        print(f">>> [MainPage] 점검 진행 중... ({timeout}초 대기)")
-        time.sleep(timeout)
-        print(">>> [MainPage] 점검 완료 및 결과 로딩 확인!")
+    def wait_for_inspection_done(self, timeout: int = 25):
+        """점검이 실제로 완료되어 '점검결과' 탭(또는 완료 팝업)에 도달할 때까지 대기"""
+        effective_timeout = max(float(timeout), 25.0)
+        print(f">>> [MainPage] 점검 진행 및 완료 대기 중... (최대 {effective_timeout:.0f}초)")
+        nav = self.wait_for_inspection_and_result_tab(timeout=effective_timeout)
+        if not nav["reached_result_tab"]:
+            raise TimeoutError(
+                f"점검 완료 후 '점검결과' 탭으로 전환되지 않았습니다. (경과={nav['elapsed']}초, 감지 탭={nav['tabs_seen']})"
+            )
+        print(f">>> [MainPage] 점검 완료 및 결과 탭 진입 확인! ({nav['elapsed']}초)")
 
     def wait_for_inspection_and_result_tab(self, timeout: float = 25.0) -> Dict[str, Any]:
         """
@@ -351,7 +379,15 @@ class MainPage:
                 return elem
         raise RuntimeError("메인 화면에서 PC보안지표 레이더 차트 요소를 찾을 수 없습니다.")
 
-    def hover_and_get_radar_tooltip(self, category: str, score: int, timeout: float = 3.0) -> Optional[int]:
+    def _hover_point(self, target_h: int, screen_x: int, screen_y: int) -> None:
+        """웹뷰(Chrome_RenderWidgetHostHWND)에 WM_MOUSEMOVE 메시지를 직접 전송해 호버를 트리거합니다."""
+        r_rect = win32gui.GetWindowRect(target_h)
+        lx = screen_x - r_rect[0]
+        ly = screen_y - r_rect[1]
+        lParam = ((ly & 0xFFFF) << 16) | (lx & 0xFFFF)
+        win32gui.PostMessage(target_h, win32con.WM_MOUSEMOVE, 0, lParam)
+
+    def hover_and_get_radar_tooltip(self, category: str, score: int, timeout: float = 4.0) -> Optional[int]:
         """
         지정된 지표 카테고리(예: '바이러스백신')의 점수(0~100)에 해당하는
         레이더 차트 다각형 꼭짓점 좌표로 마우스를 호버하고, 표시되는 툴팁 점수(int)를 반환합니다.
@@ -365,37 +401,60 @@ class MainPage:
         cx = (cr.left + cr.right) // 2
         cy = (cr.top + cr.bottom) // 2
         r_max = int(cr.height() * 0.387)
-
         deg = self.RADAR_SPOKE_ANGLES[category]
-        r_val = r_max * (max(0, min(100, score)) / 100.0)
-        vx = int(round(cx + math.cos(math.radians(deg)) * r_val))
-        vy = int(round(cy + math.sin(math.radians(deg)) * r_val))
+        target_h = self._get_target_hwnd()
 
-        user32 = ctypes.windll.user32
-        _, win = self._connect_window()
+        # 이전 툴팁을 초기화하기 위해 차트 바깥으로 커서를 이동한 뒤 기준 텍스트 스냅샷 확보
+        self._hover_point(target_h, max(0, cr.left - 25), max(0, cr.top - 25))
+        time.sleep(0.15)
+        _, win_base = self._connect_window()
+        baseline_texts = {
+            ((d.element_info.name or "").strip(), d.rectangle().left, d.rectangle().top)
+            for d in win_base.descendants(control_type="Text")
+            if d.element_info.name
+        }
 
-        start = time.time()
-        while time.time() - start < timeout:
-            user32.SetCursorPos(vx, vy)
-            time.sleep(0.4)
+        def _point_for(pct: float, radius: int) -> Tuple[int, int]:
+            r_val = radius * (max(0.0, min(100.0, pct)) / 100.0)
+            return (
+                int(round(cx + math.cos(math.radians(deg)) * r_val)),
+                int(round(cy + math.sin(math.radians(deg)) * r_val)),
+            )
 
-            for d in win.descendants(control_type="Text"):
+        def _read_tooltip_number() -> Optional[int]:
+            _, win_cur = self._connect_window()
+            for d in win_cur.descendants(control_type="Text"):
                 name = (d.element_info.name or "").strip()
+                if not name.isdigit():
+                    continue
+                val = int(name)
+                if not (0 <= val <= 100):
+                    continue
                 tr = d.rectangle()
-                if cr.left <= tr.left <= cr.right and cr.top <= tr.top <= cr.bottom:
-                    if name.isdigit() and name not in ("0", "53", "89", "90"):
-                        return int(name)
+                if (name, tr.left, tr.top) in baseline_texts:
+                    continue
+                if cr.left - 15 <= tr.left <= cr.right + 15 and cr.top - 15 <= tr.top <= cr.bottom + 15:
+                    return val
+            return None
 
-            # 약간의 미세 지터(±2px) 재시도
-            for dx, dy in [(0, -2), (0, 2), (-2, 0), (2, 0)]:
-                user32.SetCursorPos(vx + dx, vy + dy)
-                time.sleep(0.2)
-                for d in win.descendants(control_type="Text"):
-                    name = (d.element_info.name or "").strip()
-                    tr = d.rectangle()
-                    if cr.left <= tr.left <= cr.right and cr.top <= tr.top <= cr.bottom:
-                        if name.isdigit() and name not in ("0", "53", "89", "90"):
-                            return int(name)
+        vx, vy = _point_for(score, r_max)
+        candidate_points = [(vx, vy)]
+        for dx, dy in [(0, -4), (0, 4), (-4, 0), (4, 0)]:
+            candidate_points.append((vx + dx, vy + dy))
+        for alt_frac in (0.35, 0.42):
+            candidate_points.append(_point_for(score, int(cr.height() * alt_frac)))
+
+        deadline = time.time() + timeout
+        for px, py in candidate_points:
+            if time.time() >= deadline:
+                break
+            self._hover_point(target_h, px, py)
+            poll_end = min(deadline, time.time() + 0.55)
+            while time.time() < poll_end:
+                val = _read_tooltip_number()
+                if val is not None:
+                    return val
+                time.sleep(0.12)
 
         return None
 
@@ -463,8 +522,17 @@ class MainPage:
             time.sleep(0.3)
         return None
 
+    def wait_until_closed(self, timeout: float = 4.0) -> bool:
+        """보안점검 메인 창이 닫힐 때까지 대기"""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not self.is_window_visible():
+                return True
+            time.sleep(0.15)
+        return not self.is_window_visible()
+
     def click_popup_button(self, button_name: str, timeout: float = 3.0) -> bool:
-        """종료 경고 팝업의 지정 버튼('취소' 또는 '종료') 클릭"""
+        """종료 경고 팝업의 지정 버튼('취소' 또는 '종료') 클릭 후 결과 반영 대기"""
         start = time.time()
         while time.time() - start < timeout:
             target_h, win = self._connect_window()
@@ -472,9 +540,25 @@ class MainPage:
                 if (b.element_info.name or "").strip() == button_name:
                     print(f">>> [MainPage] 팝업 '{button_name}' 버튼 클릭: {b.rectangle()}")
                     self._click_element(b, target_h)
-                    time.sleep(0.6)
+                    if button_name == "종료":
+                        self.wait_until_closed(timeout=3.0)
+                    else:
+                        # '취소' 클릭 시 경고 팝업이 사라질 때까지 대기
+                        close_deadline = time.time() + 3.0
+                        while time.time() < close_deadline:
+                            if not self.is_window_visible():
+                                break
+                            _, win_chk = self._connect_window()
+                            texts = [
+                                (d.element_info.name or "").strip()
+                                for d in win_chk.descendants(control_type="Text")
+                                if d.element_info.name
+                            ]
+                            if not any("안전 기준 점수 미만" in t or "종료하시겠습니까" in t for t in texts):
+                                break
+                            time.sleep(0.15)
                     return True
-            time.sleep(0.25)
+            time.sleep(0.2)
         return False
 
     def click_help_card(self) -> None:
@@ -532,9 +616,9 @@ class MainPage:
         cy = (rect.top + rect.bottom) // 2
 
         self.bring_to_front()
-        user32 = ctypes.windll.user32
-        user32.SetCursorPos(cx, cy)
-        time.sleep(0.3)
+        target_h = self._get_target_hwnd()
+        self._hover_point(target_h, cx, cy)
+        time.sleep(0.25)
 
         start = time.time()
         while time.time() - start < timeout:
@@ -548,8 +632,8 @@ class MainPage:
             time.sleep(0.2)
         return None
 
-    def click_past_history_bar(self, bar_index: int) -> None:
-        """'지난 검사내역' 지정 막대 클릭하여 '점검이력' 상세 페이지로 이동"""
+    def click_past_history_bar(self, bar_index: int, timeout: float = 10.0) -> None:
+        """'지난 검사내역' 지정 막대 클릭하여 '점검이력' 상세 페이지 이동 및 렌더링 대기"""
         bars = self.get_past_history_bars()
         if not bars:
             raise RuntimeError("메인 화면에서 '지난 검사내역' 막대 그래프 요소를 찾을 수 없습니다.")
@@ -560,7 +644,18 @@ class MainPage:
         target_h, _ = self._connect_window()
         print(f">>> [MainPage] 지난 검사내역 {bar_index+1}번째 막대 클릭: {target_bar.rectangle()}")
         self._click_element(target_bar, target_h)
-        time.sleep(1.5)
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                if self.get_active_tab_name() == "점검이력":
+                    detail = self.get_history_detail_info()
+                    if detail.get("inspection_time") and detail.get("score") is not None:
+                        return
+            except Exception:
+                pass
+            time.sleep(0.2)
+        raise TimeoutError(f"지난 검사내역 {bar_index+1}번째 막대 클릭 후 상세 페이지 로딩 대기 시간 초과")
 
     def get_history_detail_info(self) -> Dict[str, Any]:
         """

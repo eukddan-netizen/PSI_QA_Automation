@@ -64,6 +64,25 @@ class UserInfoFormPage:
                 self._connect()
         return self.hwnd is not None and win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)
 
+    def wait_until_ready(self, timeout: float = 10.0) -> None:
+        """사용자 정보 입력 웹뷰 내부 사번/이름 입력 필드 및 저장 버튼 렌더링 완료 대기"""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.is_visible():
+                try:
+                    self._connect()
+                    edits = self.win.descendants(control_type="Edit")
+                    has_save = any(
+                        (b.element_info.name or "").strip() == "저장"
+                        for b in self.win.descendants(control_type="Button")
+                    )
+                    if len(edits) >= 2 and has_save:
+                        return
+                except Exception:
+                    pass
+            time.sleep(0.25)
+        raise TimeoutError("사용자 정보 입력 웹뷰 컨트롤이 제한 시간 내에 렌더링되지 않았습니다.")
+
     def fill_form(self, emp_no: Optional[str] = None, name: Optional[str] = None) -> None:
         """사번과 이름 입력 (UIA SetValue + 클립보드/포커스 보장)"""
         if not self.win:
@@ -174,7 +193,19 @@ class UserInfoFormPage:
                         if b.element_info.name == "확인":
                             b.invoke()
                             break
-                    time.sleep(0.5)
+                    # 모달(알림 문구)이 실제로 닫힐 때까지 대기
+                    close_dl = time.time() + 3.0
+                    while time.time() < close_dl:
+                        if not self.child_hwnd or not win32gui.IsWindow(self.child_hwnd):
+                            break
+                        try:
+                            win_chk = Application(backend="uia").connect(handle=self.child_hwnd).window(handle=self.child_hwnd)
+                            chk_texts = [t.element_info.name for t in win_chk.descendants(control_type="Text") if t.element_info.name]
+                            if alert_msg not in chk_texts:
+                                break
+                        except Exception:
+                            break
+                        time.sleep(0.15)
                     return alert_msg
             except Exception:
                 pass
