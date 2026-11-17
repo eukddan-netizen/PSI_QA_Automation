@@ -2,6 +2,7 @@ from pages.client.main_page import MainPage
 from pages.client.inspection_page import InspectionPage
 from pages.client.inspection_result_page import InspectionResultPage
 from pages.client.history_page import HistoryPage
+from pages.client.clean_page import CleanPage
 from pages.client.settings_page import SettingsPage
 from pages.client.modals.help_modal_page import (
     HelpModalPage,
@@ -20,6 +21,7 @@ __all__ = [
     "InspectionPage",
     "InspectionResultPage",
     "HistoryPage",
+    "CleanPage",
     "SettingsPage",
     "HelpModalPage",
     "HELP_ITEMS_53_KO",

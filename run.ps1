@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Position = 0)]
     $Target,
     [Parameter(Position = 1)]
@@ -165,17 +165,17 @@ if ($Target -eq "app") {
 }
 
 $TabMarkerMap = @{
-    "점검"       = @{ Marker = "app_inspection"; Label = "점검 탭 (03_점검)" }
+    "점검"         = @{ Marker = "app_inspection"; Label = "점검 탭 (03_점검)" }
     "inspection" = @{ Marker = "app_inspection"; Label = "점검 탭 (03_점검)" }
     "insp"       = @{ Marker = "app_inspection"; Label = "점검 탭 (03_점검)" }
-    "점검결과"   = @{ Marker = "app_result";     Label = "점검결과 탭 (04_점검결과)" }
-    "result"     = @{ Marker = "app_result";     Label = "점검결과 탭 (04_점검결과)" }
-    "점검이력"   = @{ Marker = "app_history";    Label = "점검이력 탭 (05_점검이력)" }
-    "history"    = @{ Marker = "app_history";    Label = "점검이력 탭 (05_점검이력)" }
-    "PC정리"     = @{ Marker = "app_clean";      Label = "PC정리 탭 (06_PC정리)" }
-    "clean"      = @{ Marker = "app_clean";      Label = "PC정리 탭 (06_PC정리)" }
-    "설정"       = @{ Marker = "app_settings";   Label = "설정 탭 (07_설정)" }
-    "settings"   = @{ Marker = "app_settings";   Label = "설정 탭 (07_설정)" }
+    "점검결과"       = @{ Marker = "app_result"; Label = "점검결과 탭 (04_점검결과)" }
+    "result"     = @{ Marker = "app_result"; Label = "점검결과 탭 (04_점검결과)" }
+    "점검이력"       = @{ Marker = "app_history"; Label = "점검이력 탭 (05_점검이력)" }
+    "history"    = @{ Marker = "app_history"; Label = "점검이력 탭 (05_점검이력)" }
+    "PC정리"       = @{ Marker = "app_clean"; Label = "PC정리 탭 (06_PC정리)" }
+    "clean"      = @{ Marker = "app_clean"; Label = "PC정리 탭 (06_PC정리)" }
+    "설정"         = @{ Marker = "app_settings"; Label = "설정 탭 (07_설정)" }
+    "settings"   = @{ Marker = "app_settings"; Label = "설정 탭 (07_설정)" }
 }
 
 if ($TabMarkerMap.ContainsKey($Target)) {
@@ -183,7 +183,8 @@ if ($TabMarkerMap.ContainsKey($Target)) {
     Write-Host "[실행] $($Info.Label) 테스트 실행 중..." -ForegroundColor Green
     if ([string]::IsNullOrWhiteSpace($SubTarget)) {
         & $VenvPytest -m $Info.Marker -s
-    } else {
+    }
+    else {
         & $VenvPytest -m $Info.Marker -k $SubTarget -s
     }
     exit $LASTEXITCODE
