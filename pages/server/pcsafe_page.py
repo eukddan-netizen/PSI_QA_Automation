@@ -28,7 +28,7 @@ class AdminPcsafePage(AdminBasePage):
             print(">>> [관리자 웹] /pcsafe 메뉴로 이동 중...")
             self.page.goto(self.PCDAFE_URL, timeout=15000)
         self.page.locator("input[placeholder='검색어 입력']").wait_for(state="visible", timeout=10000)
-        self.page.wait_for_timeout(1000)
+        self.wait_for_loading_clear(timeout=10.0)
 
     def select_department(self, dept_name: str = "t1") -> None:
         """좌측 부서트리에서 부서 클릭"""
@@ -36,7 +36,9 @@ class AdminPcsafePage(AdminBasePage):
         dept_locator = self.page.locator(f"text='{dept_name}'").first
         dept_locator.wait_for(state="visible", timeout=10000)
         dept_locator.click()
-        self.page.wait_for_timeout(2000)
+        self.page.wait_for_timeout(200)
+        self.wait_for_loading_clear(timeout=10.0)
+        self.page.locator("table", has_text="접속/단말 IP").first.wait_for(state="visible", timeout=10000)
 
     def search_current_user_by_ip(self, ip_candidates: Optional[List[str]] = None) -> str:
         """현재 PC의 ipconfig/라우팅 IP 후보로 /pcsafe 사용자를 검색하고 매칭된 IP를 저장"""
@@ -111,39 +113,34 @@ class AdminPcsafePage(AdminBasePage):
         slider = hr_ui_td.locator("span.slider")
         print(f">>> [관리자 웹] '{target_label}'의 인사 UI 출력 스위치 클릭...")
         slider.click()
-        time.sleep(1.5)
 
         # 1차 모달: "인사 UI 출력 정책을 적용하시겠습니까?" -> '예'
-        modal1 = self.page.locator("div.fixed.z-50")
-        modal1.wait_for(state="visible", timeout=5000)
         print(">>> [관리자 웹] 정책 적용 확인 팝업에서 [예] 클릭...")
-        time.sleep(1.0)
-        modal1.locator("button:has-text('예')").click()
-        time.sleep(1.5)
+        self._click_modal_button("예", timeout=10.0)
 
-        # 2차 모달: "정상 처리되었습니다." -> '확인'
-        modal2 = self.page.locator("div.fixed.z-50")
-        if modal2.is_visible():
-            confirm_btn = modal2.locator("button:has-text('확인')")
-            if confirm_btn.is_visible():
-                print(">>> [관리자 웹] 처리 완료 팝업에서 [확인] 클릭...")
-                time.sleep(1.0)
-                confirm_btn.click()
-                time.sleep(1.5)
+        # 2차 모달: "정상 처리되었습니다." -> '확인' (로딩 오버레이 자동 대기 후 클릭)
+        print(">>> [관리자 웹] 처리 완료 팝업에서 [확인] 클릭...")
+        done_text = self._click_modal_button("확인", timeout=10.0)
+        assert "정상" in done_text or "완료" in done_text or "처리" in done_text, (
+            f"인사 UI 정책 적용 후 예상치 못한 모달 응답: {done_text!r}"
+        )
 
+        # 테이블 상태가 목표값으로 반영될 때까지 폴링 대기
+        deadline = time.time() + 6.0
         new_state = self.get_hr_ui_status(username=username, user_ip=user_ip)
+        while new_state != target_state and time.time() < deadline:
+            self.page.wait_for_timeout(200)
+            new_state = self.get_hr_ui_status(username=username, user_ip=user_ip)
+
         print(f">>> [관리자 웹] 최종 변경된 상태: {new_state}")
+        assert new_state == target_state, f"인사 UI 상태 변경 실패: 기대={target_state}, 실제={new_state}"
         return new_state
 
     def refresh_user_search(self, user_ip: Optional[str] = None) -> None:
         """사용자 검색어를 다시 입력/검색하여 최신 데이터를 반영"""
         self.bring_to_front()
         target_ip = user_ip or self.target_ip or self.search_current_user_by_ip()
-        search_input = self.page.locator("input[placeholder='검색어 입력']")
-        search_btn = self.page.locator("button:text-is('검색')").first
-        search_input.fill(target_ip)
-        search_btn.click()
-        self.page.wait_for_timeout(1500)
+        _, _ = self.search_user_by_ip([target_ip])
 
     def get_user_details(self, user_ip: Optional[str] = None) -> dict:
         """

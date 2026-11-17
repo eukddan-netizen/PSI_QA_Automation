@@ -6,6 +6,7 @@ PSI 관리자 웹 콘솔 패치 관리 (/patch, /patch/client) Playwright Page O
 """
 
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 from playwright.sync_api import Locator
 
@@ -22,7 +23,7 @@ class AdminPatchPage(AdminBasePage):
             print(f">>> [관리자 웹] {self.PATCH_URL} 이동 중...")
             self.page.goto(self.PATCH_URL, timeout=15000)
         self.page.locator("input[placeholder='검색어 입력']").wait_for(state="visible", timeout=10000)
-        self.page.wait_for_timeout(1000)
+        self.wait_for_loading_clear(timeout=10.0)
 
     def _get_recommended_button(self, row: Locator) -> Locator:
         """사용자 행의 '패치 정보' 컬럼에서 '권고' 개수 버튼 Locator 반환 ('미권고' 제외)"""
@@ -42,16 +43,28 @@ class AdminPatchPage(AdminBasePage):
         btn = self._get_recommended_button(row)
         print(f">>> [관리자 웹] '권고' 개수 버튼 클릭: {btn.inner_text().strip()}")
         btn.click()
-        self.page.locator("table", has_text="패치 이름").first.wait_for(state="visible", timeout=10000)
-        self.page.wait_for_timeout(1000)
+        patch_table = self.page.locator("table", has_text="패치 이름").first
+        patch_table.wait_for(state="visible", timeout=10000)
+        self.wait_for_loading_clear(timeout=10.0)
+        patch_table.locator("tbody tr").first.wait_for(state="visible", timeout=10000)
 
     def _set_max_page_size(self) -> None:
         """페이지당 표시 개수(select.w-20)를 최대치(100개)로 설정"""
         size_select = self.page.locator("select.w-20").last
         if size_select.count() > 0 and size_select.is_visible():
             if size_select.input_value() != "100":
+                total_expected = self._get_total_count()
+                patch_table = self.page.locator("table", has_text="패치 이름").first
+                prev_count = patch_table.locator("tbody tr").count()
                 size_select.select_option("100")
-                self.page.wait_for_timeout(1200)
+                self.page.wait_for_timeout(150)
+                self.wait_for_loading_clear(timeout=10.0)
+                if total_expected is not None and total_expected > prev_count:
+                    deadline = time.time() + 5.0
+                    while time.time() < deadline:
+                        if patch_table.locator("tbody tr").count() > prev_count:
+                            break
+                        self.page.wait_for_timeout(150)
 
     def _get_total_count(self) -> Optional[int]:
         """상단 'Total N' 텍스트에서 전체 패치 건수 파싱"""
@@ -146,8 +159,22 @@ class AdminPatchPage(AdminBasePage):
             if next_btn.count() == 0 or not next_btn.first.is_visible():
                 break
 
+            try:
+                prev_tbody = patch_table.locator("tbody").inner_text().strip()
+            except Exception:
+                prev_tbody = ""
             next_btn.first.click()
-            self.page.wait_for_timeout(1200)
+            self.page.wait_for_timeout(150)
+            self.wait_for_loading_clear(timeout=10.0)
+            deadline = time.time() + 6.0
+            while time.time() < deadline:
+                try:
+                    cur_tbody = patch_table.locator("tbody").inner_text().strip()
+                    if cur_tbody and cur_tbody != prev_tbody:
+                        break
+                except Exception:
+                    pass
+                self.page.wait_for_timeout(150)
             current_page = next_page
 
         return patches

@@ -29,7 +29,7 @@ class AdminPcsafeManagePage(AdminBasePage):
             self.page.goto(self.PCSAFE_MANAGE_URL, timeout=15000)
         self.page.locator("select").first.wait_for(state="visible", timeout=10000)
         self.page.locator("table tbody tr").first.wait_for(state="visible", timeout=10000)
-        self.page.wait_for_timeout(800)
+        self.wait_for_loading_clear(timeout=10.0)
 
     def _get_policy_select(self) -> Locator:
         return self.page.locator("select").first
@@ -56,9 +56,22 @@ class AdminPcsafeManagePage(AdminBasePage):
         if target_value is None:
             raise ValueError(f"'정책 선택' 드롭다운에서 '{policy_name}' 정책을 찾을 수 없습니다.")
 
+        prev_value = sel.input_value()
         print(f">>> [관리자 웹] 정책 선택: '{policy_name}' (value={target_value})")
         sel.select_option(value=target_value)
-        self.page.wait_for_timeout(1200)
+        if prev_value != target_value:
+            self.page.wait_for_timeout(200)
+        self.wait_for_loading_clear(timeout=10.0)
+        self.page.locator("table tbody tr").first.wait_for(state="visible", timeout=10000)
+
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if sel.input_value() == target_value:
+                break
+            self.page.wait_for_timeout(100)
+        assert sel.input_value() == target_value, (
+            f"정책 선택 반영 실패: 기대={target_value!r}, 실제={sel.input_value()!r}"
+        )
 
     def get_department_policy(self, dept_name: str) -> str:
         """
@@ -164,8 +177,11 @@ class AdminPcsafeManagePage(AdminBasePage):
         inp = row.locator("input[type='number']").first
         inp.wait_for(state="visible", timeout=5000)
         inp.fill(str(score))
-        self.page.wait_for_timeout(200)
+        deadline = time.time() + 2.0
         actual = inp.input_value().strip()
+        while actual != str(score) and time.time() < deadline:
+            self.page.wait_for_timeout(100)
+            actual = inp.input_value().strip()
         assert actual == str(score), f"{item_no}번 항목 점수 입력 실패: 기대={score}, 실제={actual}"
         print(f">>> [관리자 웹] {item_no}번 항목 점수 변경 -> {score}점")
 
@@ -194,23 +210,15 @@ class AdminPcsafeManagePage(AdminBasePage):
                 }"""
             )
         sel.select_option(value=target_val)
-        self.page.wait_for_timeout(300)
+        deadline = time.time() + 2.0
         actual = sel.input_value().strip()
         actual_score = 0 if not actual else int(actual)
+        while actual_score != score and time.time() < deadline:
+            self.page.wait_for_timeout(100)
+            actual = sel.input_value().strip()
+            actual_score = 0 if not actual else int(actual)
         assert actual_score == score, f"안전 기준 점수 변경 실패: 기대={score}, 실제={actual!r}"
         print(f">>> [관리자 웹] 안전 기준 점수 변경 -> {score}점")
-
-    def _click_modal_button(self, button_text: str, timeout: float = 5.0) -> str:
-        """확인/선택 모달(div.fixed.z-50) 대기 후 지정 버튼 클릭 및 본문 텍스트 반환"""
-        modal = self.page.locator("div.fixed.z-50").first
-        modal.wait_for(state="visible", timeout=int(timeout * 1000))
-        modal_text = modal.inner_text().strip()
-        btn = modal.locator(f"button:text-is('{button_text}')").first
-        if btn.count() == 0:
-            btn = modal.locator(f"button:has-text('{button_text}')").first
-        btn.click()
-        self.page.wait_for_timeout(800)
-        return modal_text
 
     def save_policy(self) -> None:
         """하단 '수정' 버튼 클릭 및 '정상 처리되었습니다.' 모달 확인"""
@@ -220,7 +228,7 @@ class AdminPcsafeManagePage(AdminBasePage):
         edit_btn.scroll_into_view_if_needed()
         edit_btn.click()
 
-        modal_text = self._click_modal_button("확인", timeout=8.0)
+        modal_text = self._click_modal_button("확인", timeout=10.0)
         assert "정상" in modal_text or "완료" in modal_text or "수정" in modal_text, (
             f"정책 수정 후 예상하지 못한 모달 응답입니다: {modal_text!r}"
         )
@@ -234,10 +242,10 @@ class AdminPcsafeManagePage(AdminBasePage):
         apply_btn.scroll_into_view_if_needed()
         apply_btn.click()
 
-        confirm_text = self._click_modal_button("예", timeout=8.0)
+        confirm_text = self._click_modal_button("예", timeout=10.0)
         assert "적용" in confirm_text, f"정책 적용 확인 모달 문구가 예상과 다릅니다: {confirm_text!r}"
 
-        done_text = self._click_modal_button("확인", timeout=8.0)
+        done_text = self._click_modal_button("확인", timeout=10.0)
         assert "정상" in done_text or "완료" in done_text, (
             f"정책 적용 완료 모달 문구가 예상과 다릅니다: {done_text!r}"
         )

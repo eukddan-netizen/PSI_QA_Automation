@@ -5,6 +5,7 @@ PSI 관리자 웹 콘솔 에이전트 관리 (/manageAgent) Playwright Page Obje
 """
 
 import re
+import time
 from typing import Dict
 from playwright.sync_api import Locator, Page
 
@@ -26,8 +27,14 @@ class AdminManageAgentPage(AdminBasePage):
         if "/manageAgent" not in self.page.url:
             print(f"\n>>> [관리자 웹] {self.MANAGE_AGENT_URL} 이동 중...")
             self.page.goto(self.MANAGE_AGENT_URL, timeout=15000)
-        self.page.locator("tr", has_text="최근 등록 정보").first.wait_for(state="visible", timeout=10000)
-        self.page.wait_for_timeout(600)
+        row = self.page.locator("tr", has_text="최근 등록 정보").first
+        row.wait_for(state="visible", timeout=10000)
+        self.wait_for_loading_clear(timeout=10.0)
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if self.get_recent_registration_text():
+                break
+            self.page.wait_for_timeout(150)
 
     def _get_recent_registration_row(self) -> Locator:
         """'최근 등록 정보' 행(tr) Locator 반환"""

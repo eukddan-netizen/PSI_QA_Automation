@@ -38,7 +38,7 @@ class AdminManageConfigPage(AdminBasePage):
             self.page.goto(self.MANAGE_CONFIG_URL, timeout=15000)
         # 탭 바 로딩 대기
         self.page.locator("button[data-value='agent']").wait_for(state="visible", timeout=10000)
-        self.page.wait_for_timeout(800)
+        self.wait_for_loading_clear(timeout=10.0)
 
     def select_tab(self, tab_name: str = "보안점검") -> None:
         """
@@ -50,14 +50,18 @@ class AdminManageConfigPage(AdminBasePage):
         btn = self.page.locator(f"button[data-value='{tab_value}']").first
         btn.wait_for(state="visible", timeout=10000)
         btn.click()
-        self.page.wait_for_timeout(1000)
 
-        # 탭 활성화 확인 (data-state="active")
-        active_tab = self.page.locator(f"button[data-value='{tab_value}'][data-state='active']")
-        if active_tab.count() == 0:
-            # 1회 재클릭
+        # 탭 활성화(data-state='active') 대기 (미전환 시 1회 재클릭)
+        active_tab = self.page.locator(f"button[data-value='{tab_value}'][data-state='active']").first
+        try:
+            active_tab.wait_for(state="visible", timeout=3000)
+        except Exception:
             btn.click()
-            self.page.wait_for_timeout(1000)
+            active_tab.wait_for(state="visible", timeout=5000)
+
+        self.wait_for_loading_clear(timeout=10.0)
+        if tab_name == "보안점검":
+            self._get_contact_row()
 
     def _get_contact_row(self) -> Locator:
         """보안점검 탭 내 '문의처' 행(tr) Locator 반환"""
@@ -79,22 +83,14 @@ class AdminManageConfigPage(AdminBasePage):
         inp.scroll_into_view_if_needed()
         inp.wait_for(state="visible", timeout=5000)
         inp.fill(text)
-        self.page.wait_for_timeout(300)
+
+        deadline = time.time() + 2.0
         actual = inp.input_value().strip()
+        while actual != text and time.time() < deadline:
+            self.page.wait_for_timeout(100)
+            actual = inp.input_value().strip()
         assert actual == text, f"문의처 입력값 불일치: 기대={text!r}, 실제={actual!r}"
         print(f">>> [관리자 웹] 문의처 입력값 변경 -> '{text}'")
-
-    def _click_modal_button(self, button_text: str = "확인", timeout: float = 6.0) -> str:
-        """저장 확인 모달(div.fixed 또는 role='dialog') 내 지정 버튼 클릭"""
-        # 다이얼로그나 모달 컨테이너 탐색
-        modal = self.page.locator("div.fixed, div[role='dialog']").filter(has_text=button_text).first
-        modal.wait_for(state="visible", timeout=int(timeout * 1000))
-        modal_text = modal.inner_text().strip()
-
-        btn = modal.locator(f"button:has-text('{button_text}')").first
-        btn.click()
-        self.page.wait_for_timeout(800)
-        return modal_text
 
     def save_config(self) -> None:
         """가장 하단의 '저장' 버튼 클릭 및 완료 모달('정상 처리되었습니다.') 확인"""
@@ -104,11 +100,10 @@ class AdminManageConfigPage(AdminBasePage):
         save_btn.scroll_into_view_if_needed()
         save_btn.click()
 
-        # 완료 모달 확인
-        modal_text = self._click_modal_button("확인", timeout=8.0)
+        # 완료 모달 확인 (로딩 오버레이 자동 대기 후 실제 확인 모달 클릭 및 닫힘 대기)
+        modal_text = self._click_modal_button("확인", timeout=10.0)
         assert "정상" in modal_text or "완료" in modal_text or "처리" in modal_text, (
             f"환경설정 저장 후 예상치 못한 모달 응답: {modal_text!r}"
         )
         print(">>> [관리자 웹] 환경설정 저장 및 확인 모달 처리 완료!")
-        self.page.wait_for_timeout(1000)
 
