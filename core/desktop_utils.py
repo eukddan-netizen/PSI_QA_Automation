@@ -477,7 +477,8 @@ def launch_visible_chrome(port: int = 9222) -> _ChromeProcessHandle:
     ps_cmd = (
         f"$action = New-ScheduledTaskAction -Execute '{ps_exe_str}' -Argument '{ps_arg_str}'; "
         "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; "
-        "$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive; "
+        "$uid = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name; "
+        "$principal = New-ScheduledTaskPrincipal -UserId $uid -LogonType Interactive; "
         f"Register-ScheduledTask -TaskName '{task_name}' -Action $action -Settings $settings -Principal $principal -Force | Out-Null; "
         f"Start-ScheduledTask -TaskName '{task_name}'"
     )
