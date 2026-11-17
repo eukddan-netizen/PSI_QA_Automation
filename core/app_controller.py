@@ -8,10 +8,11 @@
 import os
 import sys
 import time
+import threading
 import ctypes
 from ctypes import wintypes
 import subprocess
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 # 1. win32gui 임포트 전에 무조건 DPI 인식 및 사용자 데스크톱 전환을 먼저 수행해야 합니다.
 try:
@@ -302,46 +303,54 @@ class AppController:
         if opened_overflow:
             self._close_tray_overflow()
 
+    @staticmethod
+    def _find_tray_dialogs(exclude_hwnds: Optional[set] = None) -> List[Tuple[int, str]]:
+        """현재 화면에 표시된 트레이 알림/정보 팝업(#32770)들의 (HWND, 본문 텍스트) 목록을 반환합니다."""
+        if exclude_hwnds is None:
+            exclude_hwnds = set()
+
+        found_hwnds = []
+        def cb(h, _):
+            if win32gui.IsWindow(h) and win32gui.IsWindowVisible(h):
+                if h not in exclude_hwnds and win32gui.GetClassName(h) == "#32770":
+                    rect = win32gui.GetWindowRect(h)
+                    w = rect[2] - rect[0]
+                    h_len = rect[3] - rect[1]
+                    # TopAegis 팝업 크기 필터 (가로 150~600, 세로 80~450)
+                    if 150 < w < 600 and 80 < h_len < 450:
+                        found_hwnds.append(h)
+        win32gui.EnumWindows(cb, None)
+
+        dialogs: List[Tuple[int, str]] = []
+        for dlg_hwnd in found_hwnds:
+            texts = []
+            def child_cb(ch, _):
+                txt = win32gui.GetWindowText(ch).strip()
+                if txt:
+                    texts.append(txt)
+            win32gui.EnumChildWindows(dlg_hwnd, child_cb, None)
+            if texts:
+                dialogs.append((dlg_hwnd, "\n".join(texts)))
+        return dialogs
+
     def wait_for_tray_dialog(self, timeout: float = 20.0, exclude_hwnds: Optional[set] = None) -> Optional[Tuple[int, str]]:
         """
         트레이 메뉴 클릭 후 출력되는 Win32 알림/정보 팝업(#32770)의 (HWND, 본문 텍스트)를 반환합니다.
         보안 에이전트 팝업은 윈도우 타이틀이 빈 문자열이고 내부 자식(Static) 컨트롤에 텍스트가 나뉘어 있으므로,
         모든 자식 컨트롤의 텍스트를 수집하여 결합합니다.
         """
-        if exclude_hwnds is None:
-            exclude_hwnds = set()
-
         start = time.time()
         while time.time() - start < timeout:
-            found_hwnds = []
-            def cb(h, _):
-                if win32gui.IsWindow(h) and win32gui.IsWindowVisible(h):
-                    if h not in exclude_hwnds and win32gui.GetClassName(h) == "#32770":
-                        rect = win32gui.GetWindowRect(h)
-                        w = rect[2] - rect[0]
-                        h_len = rect[3] - rect[1]
-                        # TopAegis 팝업 크기 필터 (가로 150~600, 세로 80~450)
-                        if 150 < w < 600 and 80 < h_len < 450:
-                            found_hwnds.append(h)
-            win32gui.EnumWindows(cb, None)
-
-            for dlg_hwnd in found_hwnds:
-                texts = []
-                def child_cb(ch, _):
-                    txt = win32gui.GetWindowText(ch).strip()
-                    if txt:
-                        texts.append(txt)
-                win32gui.EnumChildWindows(dlg_hwnd, child_cb, None)
-
-                combined = " ".join(texts)
-                if any(k in combined for k in ("TA-", "서버", "IP", "소프트웨어", "폰트", "재검사", "업데이트", "성공")) or texts:
-                    full_text = "\n".join(texts)
+            for dlg_hwnd, full_text in self._find_tray_dialogs(exclude_hwnds=exclude_hwnds):
+                combined = full_text.replace("\n", " ")
+                if any(k in combined for k in ("TA-", "서버", "IP", "소프트웨어", "폰트", "재검사", "업데이트", "성공")) or full_text:
                     return dlg_hwnd, full_text
 
             time.sleep(0.3)
         return None
 
-    def close_tray_dialog(self, dlg_hwnd: int) -> bool:
+    @staticmethod
+    def close_tray_dialog(dlg_hwnd: int) -> bool:
         """
         트레이 알림/정보 팝업(#32770)의 [확인] 버튼(하단 Static/Button)을 클릭하여 안전하게 창을 닫습니다.
         """
@@ -558,3 +567,71 @@ class AppController:
             time.sleep(0.3)
 
         return not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd))
+
+
+# ---------------------------------------------------------------------------
+# 지연된 트레이 재검사 완료 팝업 자동 정리 워처
+# (프로그램 목록 재확인 / 폰트 목록 재확인 1분 타임아웃 PASS 이후 7~8분 뒤 뜨는 팝업 대응)
+# ---------------------------------------------------------------------------
+_delayed_watcher_lock = threading.Lock()
+_delayed_watcher_keywords: set = set()
+_delayed_watcher_stop = threading.Event()
+_delayed_watcher_thread: Optional[threading.Thread] = None
+_delayed_watcher_deadline: float = 0.0
+
+
+def _delayed_rescan_watcher_loop() -> None:
+    """백그라운드에서 지연된 재검사 완료 팝업(#32770)을 감시해 자동으로 닫습니다."""
+    while not _delayed_watcher_stop.wait(1.0):
+        with _delayed_watcher_lock:
+            keywords = set(_delayed_watcher_keywords)
+            deadline = _delayed_watcher_deadline
+
+        if not keywords or time.time() >= deadline:
+            break
+
+        try:
+            dialogs = AppController._find_tray_dialogs()
+        except Exception:
+            continue
+
+        for dlg_hwnd, dlg_text in dialogs:
+            if "재검사" not in dlg_text:
+                continue
+            matched = [kw for kw in keywords if kw in dlg_text]
+            if not matched:
+                continue
+
+            print(f">>> [지연 팝업 자동 정리] {', '.join(matched)} 재검사 완료 팝업 감지(HWND={dlg_hwnd}) -> [확인] 닫기 처리")
+            AppController.close_tray_dialog(dlg_hwnd)
+            with _delayed_watcher_lock:
+                for kw in matched:
+                    _delayed_watcher_keywords.discard(kw)
+
+
+def register_delayed_rescan_watcher(keyword: str, ttl_seconds: float = 900.0) -> None:
+    """
+    지정된 키워드(예: '소프트웨어', '폰트')를 포함한 지연 재검사 완료 팝업이
+    이후 테스트 진행 중 출력되면 자동으로 닫도록 백그라운드 감시 스레드를 등록합니다.
+    """
+    global _delayed_watcher_thread, _delayed_watcher_deadline
+
+    with _delayed_watcher_lock:
+        _delayed_watcher_keywords.add(keyword)
+        _delayed_watcher_deadline = max(_delayed_watcher_deadline, time.time() + ttl_seconds)
+
+        if _delayed_watcher_thread is None or not _delayed_watcher_thread.is_alive():
+            _delayed_watcher_stop.clear()
+            _delayed_watcher_thread = threading.Thread(
+                target=_delayed_rescan_watcher_loop,
+                name="delayed-tray-popup-watcher",
+                daemon=True,
+            )
+            _delayed_watcher_thread.start()
+
+
+def stop_delayed_rescan_watcher() -> None:
+    """지연 재검사 팝업 백그라운드 감시 스레드를 중지합니다."""
+    with _delayed_watcher_lock:
+        _delayed_watcher_keywords.clear()
+        _delayed_watcher_stop.set()

@@ -6,6 +6,7 @@
 
 import pytest
 from common.os_utils import require_admin
+from core.app_controller import register_delayed_rescan_watcher
 
 
 @pytest.mark.app_check
@@ -27,7 +28,8 @@ def test_row17_font_rescan(app_ctrl):
     app_ctrl.click_tray_menu_item("폰트 목록 재확인")
     dialog = app_ctrl.wait_for_tray_dialog(timeout=60.0)
     if dialog is None:
-        print(">>> [5_0001] 1분(60초) 경과 후에도 반응(팝업)이 없어 PASS 처리합니다.")
+        print(">>> [5_0001] 1분(60초) 경과 후에도 반응(팝업)이 없어 PASS 처리합니다. (지연 팝업 자동 닫기 감시 등록)")
+        register_delayed_rescan_watcher("폰트")
         return
 
     dlg_hwnd, dlg_text = dialog

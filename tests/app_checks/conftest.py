@@ -5,7 +5,14 @@
 
 import pytest
 
-from core.app_controller import AppController
+from core.app_controller import AppController, stop_delayed_rescan_watcher
+
+
+@pytest.fixture(scope="session", autouse=True)
+def delayed_tray_popup_cleanup():
+    """세션 종료 시 지연된 트레이 재검사 팝업 감시 스레드를 정리합니다."""
+    yield
+    stop_delayed_rescan_watcher()
 
 
 @pytest.fixture(scope="function")
