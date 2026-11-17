@@ -3,9 +3,24 @@ pytest 공통 설정 및 fixture 정의
 - state_guard: 각 점검 테스트가 변경한 레지스트리/계정/OS 설정을 테스트 종료 시(실패 포함) 원래 값으로 자동 복구
 """
 
+import ctypes
+from ctypes import wintypes
 import sys
 from pathlib import Path
 import pytest
+
+# win32gui/pywinauto 임포트 전에 프로세스 DPI 인식을 먼저 활성화 (좌표 밀림 방지)
+try:
+    _u32 = ctypes.windll.user32
+    _u32.SetProcessDpiAwarenessContext.argtypes = [wintypes.HANDLE]
+    _u32.SetProcessDpiAwarenessContext.restype = wintypes.BOOL
+    if not _u32.SetProcessDpiAwarenessContext(wintypes.HANDLE(-4)):
+        _u32.SetProcessDPIAware()
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 ROOT_DIR = str(Path(__file__).resolve().parent)
 if ROOT_DIR not in sys.path:

@@ -9,14 +9,22 @@ import os
 import sys
 import time
 import ctypes
+from ctypes import wintypes
 import subprocess
 from typing import Optional, Tuple
 
 # 1. win32gui 임포트 전에 무조건 DPI 인식 및 사용자 데스크톱 전환을 먼저 수행해야 합니다.
 try:
-    ctypes.windll.user32.SetProcessDPIAware()
+    _u32 = ctypes.windll.user32
+    _u32.SetProcessDpiAwarenessContext.argtypes = [wintypes.HANDLE]
+    _u32.SetProcessDpiAwarenessContext.restype = wintypes.BOOL
+    if not _u32.SetProcessDpiAwarenessContext(wintypes.HANDLE(-4)):
+        _u32.SetProcessDPIAware()
 except Exception:
-    pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 from core.desktop_utils import bring_window_to_front, switch_to_user_desktop
 switch_to_user_desktop()
@@ -148,11 +156,33 @@ class AppController:
         try:
             app = Application(backend="uia").connect(handle=hwnd)
             win = app.window(handle=hwnd)
+            candidates = []
             for b in win.descendants(control_type="Button"):
                 name = b.element_info.name or ""
                 if "TA-STR" in name or "TA-PRS" in name:
                     rect = b.rectangle()
-                    return (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
+                    if rect.width() <= 0 or rect.height() <= 0:
+                        continue
+                    if rect.left <= 0 and rect.top <= 0 and rect.right <= 0:
+                        continue
+                    candidates.append((rect.width(), name, rect))
+
+            if not candidates:
+                return None
+
+            # 가장 좁은(구체적인) 버튼 선택
+            candidates.sort(key=lambda item: item[0])
+            width, name, rect = candidates[0]
+
+            # Windows 11 작업표시줄 UIA에서 트레이 버튼의 right가 화면 끝(예: 1920)까지
+            # 늘어나 보고되는 경우, 실제 아이콘은 rect.left 기준 첫 아이콘 폭(~36px) 내에 위치
+            if width > 80:
+                cx = rect.left + min(rect.height() // 2, 20)
+            else:
+                cx = (rect.left + rect.right) // 2
+            cy = (rect.top + rect.bottom) // 2
+            print(f">>> [트레이 탐색] '{name}' 위치=({cx}, {cy}), rect={rect}")
+            return cx, cy
         except Exception:
             pass
         return None
@@ -170,38 +200,50 @@ class AppController:
             return pos[0], pos[1], False
 
         self._open_tray_overflow()
-        ov_hwnd = 0
-        deadline = time.time() + 2.5
+        deadline = time.time() + 3.0
         while time.time() < deadline:
             ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
             if ov and win32gui.IsWindowVisible(ov):
-                ov_hwnd = ov
-                break
+                pos = self._find_ta_icon_center_in_hwnd(ov)
+                if pos is not None:
+                    return pos[0], pos[1], True
             time.sleep(0.2)
 
-        if ov_hwnd:
-            pos = self._find_ta_icon_center_in_hwnd(ov_hwnd)
-            if pos is not None:
-                return pos[0], pos[1], True
-
-        return 1463, 993, True
+        raise RuntimeError(
+            "작업표시줄 및 숨겨진 아이콘 영역에서 'TA-STR' 또는 'TA-PRS' 트레이 아이콘을 찾지 못했습니다."
+        )
 
     def _double_click_tray_icon(self):
         """작업표시줄 또는 숨겨진 아이콘 영역에서 보안점검 아이콘 더블클릭"""
         user32 = ctypes.windll.user32
-        cx, cy, opened_overflow = self._locate_ta_tray_icon()
+        prev_ctx = None
+        try:
+            user32.SetThreadDpiAwarenessContext.argtypes = [wintypes.HANDLE]
+            user32.SetThreadDpiAwarenessContext.restype = wintypes.HANDLE
+            prev_ctx = user32.SetThreadDpiAwarenessContext(wintypes.HANDLE(-4))
+        except Exception:
+            prev_ctx = None
 
-        user32.SetCursorPos(cx, cy)
-        time.sleep(0.1)
-        for _ in range(2):
-            user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, cx, cy, 0, 0)
-            time.sleep(0.05)
-            user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
-            time.sleep(0.08)
-        time.sleep(0.6)
+        try:
+            cx, cy, opened_overflow = self._locate_ta_tray_icon()
 
-        if opened_overflow:
-            self._close_tray_overflow()
+            user32.SetCursorPos(cx, cy)
+            time.sleep(0.1)
+            for _ in range(2):
+                user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, cx, cy, 0, 0)
+                time.sleep(0.05)
+                user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
+                time.sleep(0.08)
+            time.sleep(0.6)
+
+            if opened_overflow:
+                self._close_tray_overflow()
+        finally:
+            if prev_ctx:
+                try:
+                    user32.SetThreadDpiAwarenessContext(prev_ctx)
+                except Exception:
+                    pass
 
     def click_tray_menu_item(self, item_name: str, timeout: float = 10.0) -> None:
         """
