@@ -389,29 +389,32 @@ class InspectionResultPage:
         diag_text: Optional[str] = None
         deadline = time.time() + timeout
         while time.time() < deadline:
-            win_modal = self._get_app_window()
-            texts = [
-                (t.element_info.name or "").strip()
-                for t in win_modal.descendants(control_type="Text")
-                if t.element_info.name
-            ]
-            if "・진단결과" in texts:
-                idx = texts.index("・진단결과")
-                collected = []
-                for k in range(idx + 1, len(texts)):
-                    if texts[k].startswith("・"):
-                        break
-                    collected.append(texts[k])
-                diag_text = "\n".join(collected).strip()
-                for b in win_modal.descendants(control_type="Button"):
-                    if (b.element_info.name or "").strip() in ("확인", "닫기"):
-                        try:
-                            b.invoke()
-                        except Exception:
-                            self._click_element(b)
-                        time.sleep(0.25)
-                        break
-                break
+            try:
+                win_modal = self._get_app_window()
+                texts = [
+                    (t.element_info.name or "").strip()
+                    for t in win_modal.descendants(control_type="Text")
+                    if t.element_info.name
+                ]
+                if "・진단결과" in texts:
+                    idx = texts.index("・진단결과")
+                    collected = []
+                    for k in range(idx + 1, len(texts)):
+                        if texts[k].startswith("・"):
+                            break
+                        collected.append(texts[k])
+                    diag_text = "\n".join(collected).strip()
+                    for b in win_modal.descendants(control_type="Button"):
+                        if (b.element_info.name or "").strip() in ("확인", "닫기"):
+                            try:
+                                b.invoke()
+                            except Exception:
+                                self._click_element(b)
+                            time.sleep(0.25)
+                            break
+                    break
+            except (KeyError, Exception):
+                pass
             time.sleep(0.2)
 
         return diag_text

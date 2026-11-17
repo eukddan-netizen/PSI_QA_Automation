@@ -10,6 +10,7 @@ import sys
 
 # Server (관리자 웹 콘솔) Page Objects
 from pages.server.base_page import AdminBasePage
+from pages.server.manage_agent_page import AdminManageAgentPage
 from pages.server.manage_config_page import AdminManageConfigPage
 from pages.server.patch_page import AdminPatchPage
 from pages.server.pcsafe_manage_page import AdminPcsafeManagePage
@@ -35,6 +36,7 @@ from pages.client.tray.user_info_form_page import UserInfoFormPage
 
 # 기존 레거시 import(from pages.main_page import MainPage 등) 완벽한 하위 호환성 매핑
 import pages.server.base_page as _admin_base_page
+import pages.server.manage_agent_page as _admin_manage_agent_page
 import pages.server.manage_config_page as _admin_manage_config_page
 import pages.server.patch_page as _admin_patch_page
 import pages.server.pcsafe_manage_page as _admin_pcsafe_manage_page
@@ -48,6 +50,7 @@ import pages.client.tray.tray_patch_status_page as _tray_patch_status_page
 import pages.client.tray.user_info_form_page as _user_info_form_page
 
 sys.modules.setdefault("pages.admin_base_page", _admin_base_page)
+sys.modules.setdefault("pages.admin_manage_agent_page", _admin_manage_agent_page)
 sys.modules.setdefault("pages.admin_manage_config_page", _admin_manage_config_page)
 sys.modules.setdefault("pages.admin_patch_page", _admin_patch_page)
 sys.modules.setdefault("pages.admin_pcsafe_manage_page", _admin_pcsafe_manage_page)
@@ -63,6 +66,7 @@ sys.modules.setdefault("pages.user_info_form_page", _user_info_form_page)
 __all__ = [
     # Server
     "AdminBasePage",
+    "AdminManageAgentPage",
     "AdminManageConfigPage",
     "AdminPatchPage",
     "AdminPcsafeManagePage",
