@@ -39,6 +39,7 @@ class AdminPcsafeManagePage(AdminBasePage):
 
     def select_policy(self, policy_name: str = "t1") -> None:
         """좌측 '정책 선택' 드롭다운에서 지정된 정책(예: 't1') 선택"""
+        self.bring_to_front()
         sel = self._get_policy_select()
         sel.wait_for(state="visible", timeout=10000)
 
@@ -173,6 +174,7 @@ class AdminPcsafeManagePage(AdminBasePage):
 
     def set_item_score(self, item_no: int, score: int, item_name: Optional[str] = None) -> None:
         """특정 점검 항목의 점수 컬럼 입력값 변경"""
+        self.bring_to_front()
         row = self._get_item_row(item_no=item_no, item_name=item_name)
         inp = row.locator("input[type='number']").first
         inp.wait_for(state="visible", timeout=5000)
@@ -196,6 +198,7 @@ class AdminPcsafeManagePage(AdminBasePage):
 
     def set_safety_score(self, score: int) -> None:
         """우측 하단 '안전 기준 점수' 드롭다운 값 변경 (예: 0(공란), 10, 100)"""
+        self.bring_to_front()
         sel = self._get_safety_score_select()
         sel.wait_for(state="visible", timeout=5000)
         target_val = str(score)

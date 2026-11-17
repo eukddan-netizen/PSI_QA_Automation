@@ -499,17 +499,21 @@ class MainPage:
             if not self.is_window_visible():
                 return None
 
-            _, win = self._connect_window()
-            texts = [
-                (d.element_info.name or "").strip()
-                for d in win.descendants(control_type="Text")
-                if d.element_info.name
-            ]
-            buttons = {
-                (b.element_info.name or "").strip(): b
-                for b in win.descendants(control_type="Button")
-                if b.element_info.name
-            }
+            try:
+                _, win = self._connect_window()
+                texts = [
+                    (d.element_info.name or "").strip()
+                    for d in win.descendants(control_type="Text")
+                    if d.element_info.name
+                ]
+                buttons = {
+                    (b.element_info.name or "").strip(): b
+                    for b in win.descendants(control_type="Button")
+                    if b.element_info.name
+                }
+            except Exception:
+                time.sleep(0.15)
+                continue
 
             if any("안전 기준 점수 미만" in t or "종료하시겠습니까" in t for t in texts):
                 relevant_texts = [
@@ -548,12 +552,16 @@ class MainPage:
                         while time.time() < close_deadline:
                             if not self.is_window_visible():
                                 break
-                            _, win_chk = self._connect_window()
-                            texts = [
-                                (d.element_info.name or "").strip()
-                                for d in win_chk.descendants(control_type="Text")
-                                if d.element_info.name
-                            ]
+                            try:
+                                _, win_chk = self._connect_window()
+                                texts = [
+                                    (d.element_info.name or "").strip()
+                                    for d in win_chk.descendants(control_type="Text")
+                                    if d.element_info.name
+                                ]
+                            except Exception:
+                                time.sleep(0.15)
+                                continue
                             if not any("안전 기준 점수 미만" in t or "종료하시겠습니까" in t for t in texts):
                                 break
                             time.sleep(0.15)

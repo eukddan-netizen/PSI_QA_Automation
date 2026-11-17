@@ -49,10 +49,12 @@ def bring_window_to_front(hwnd: int) -> bool:
         return False
 
 
-def bring_chrome_to_front(title_hint: str = "") -> bool:
+def bring_chrome_to_front(title_hint: str = "", port: Optional[int] = None) -> bool:
     """
     Playwright/CDP로 제어 중인 관리자 웹 Chrome 창을 최상단으로 올립니다.
     """
+    switch_to_user_desktop()
+    debug_pids = _get_debug_chrome_pids(port)
     matched_hwnd = 0
 
     def cb(h, _):
@@ -64,6 +66,11 @@ def bring_chrome_to_front(title_hint: str = "") -> bool:
         title = win32gui.GetWindowText(h) or ""
         if not title:
             return
+        if debug_pids:
+            _, pid = win32process.GetWindowThreadProcessId(h)
+            if pid in debug_pids:
+                matched_hwnd = h
+                return
         if title_hint and title_hint in title:
             matched_hwnd = h
         elif any(k in title for k in ("TA-PRS", "192.168", "about:blank")):
@@ -441,63 +448,107 @@ def launch_visible_chrome(port: int = 9222) -> _ChromeProcessHandle:
     os.makedirs(user_data, exist_ok=True)
     _sanitize_chrome_profile(user_data)
 
-    # 2. 작업 스케줄러 배치를 통해 사용자 모니터 대화형 세션에서 실행
-    bat_path = os.path.join(r"C:\Temp", f"launch_chrome_{port}.bat")
-    with open(bat_path, "w", encoding="cp949") as f:
-        f.write(
-            f'@echo off\r\n'
-            f'start "" "{chrome_exe}" --remote-debugging-port={port} '
-            f'--user-data-dir="{user_data}" --ignore-certificate-errors --no-first-run '
-            f'--no-default-browser-check --hide-crash-restore-bubble '
-            f'--disable-save-password-bubble --new-window --start-maximized about:blank\r\n'
-        )
+    chrome_args = [
+        f"--remote-debugging-port={port}",
+        f"--user-data-dir={user_data}",
+        "--ignore-certificate-errors",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--hide-crash-restore-bubble",
+        "--disable-save-password-bubble",
+        "--new-window",
+        "--start-maximized",
+        "about:blank",
+    ]
 
-    task_name = f"LaunchChromeBat_{port}"
-    subprocess.run(f'schtasks /create /tn "{task_name}" /tr "{bat_path}" /sc once /st 00:00 /f >nul 2>&1', shell=True)
-    subprocess.run(f'schtasks /run /tn "{task_name}" >nul 2>&1', shell=True)
-    time.sleep(1.5)
-    subprocess.run(f'schtasks /delete /tn "{task_name}" /f >nul 2>&1', shell=True)
+    def _popen_on_user_desktop() -> None:
+        si = subprocess.STARTUPINFO()
+        si.lpDesktop = "WinSta0\\Default"
+        subprocess.Popen([chrome_exe, *chrome_args], startupinfo=si)
 
-    # 3. CDP 연결 대기
+    # 2. PowerShell ScheduledTask(Interactive + AllowStartIfOnBatteries)로
+    #    항상 사용자의 실제 모니터 세션('WinSta0\Default')에 실행 (실패 시에만 직접 실행 폴백)
+    #    ※ conftest 등에서 스레드 데스크톱만 전환된 경우에도 Popen은 부모 WindowStation을 상속해
+    #      화면에 안 보일 수 있으므로, 항상 ScheduledTask를 우선 사용합니다.
+    launched_direct = False
+    task_name = f"LaunchChromePS_{port}"
+    ps_arg_str = " ".join(chrome_args).replace("'", "''")
+    ps_exe_str = chrome_exe.replace("'", "''")
+    ps_cmd = (
+        f"$action = New-ScheduledTaskAction -Execute '{ps_exe_str}' -Argument '{ps_arg_str}'; "
+        "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; "
+        "$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive; "
+        f"Register-ScheduledTask -TaskName '{task_name}' -Action $action -Settings $settings -Principal $principal -Force | Out-Null; "
+        f"Start-ScheduledTask -TaskName '{task_name}'"
+    )
+    r_ps = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", ps_cmd],
+        capture_output=True, text=True,
+    )
+    if r_ps.returncode != 0:
+        err_msg = (r_ps.stderr or r_ps.stdout or "").strip()
+        print(f">>> [Chrome] 작업 스케줄러 실행 실패({err_msg}), 직접 실행으로 폴백합니다.")
+        _popen_on_user_desktop()
+        launched_direct = True
+    else:
+        # Chrome 프로세스가 실제로 뜰 때까지 최대 4초 대기 후 임시 작업 정리
+        wait_end = time.time() + 4.0
+        while time.time() < wait_end:
+            if _get_debug_chrome_pids(port):
+                break
+            time.sleep(0.3)
+
+    subprocess.run(
+        ["powershell", "-NoProfile", "-Command", f"Unregister-ScheduledTask -TaskName '{task_name}' -Confirm:$false -ErrorAction SilentlyContinue"],
+        capture_output=True,
+    )
+
+    if not launched_direct and not _get_debug_chrome_pids(port):
+        print(">>> [Chrome] 작업 스케줄러 실행 후 Chrome 프로세스가 감지되지 않아 직접 실행으로 폴백합니다.")
+        _popen_on_user_desktop()
+
+    # 3. CDP 연결 대기 (시스템 프록시 우회)
+    no_proxy_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     start = time.time()
     cdp_ready = False
+    last_err: Optional[Exception] = None
     while time.time() - start < 15:
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=1) as res:
+            with no_proxy_opener.open(f"http://127.0.0.1:{port}/json/version", timeout=1) as res:
                 if res.status == 200:
                     cdp_ready = True
                     break
-        except Exception:
+        except Exception as e:
+            last_err = e
             time.sleep(0.3)
 
     if not cdp_ready:
-        raise TimeoutError(f"크롬 브라우저 CDP(포트 {port}) 연결에 실패했습니다.")
+        pids = _get_debug_chrome_pids(port)
+        raise TimeoutError(
+            f"크롬 브라우저 CDP(포트 {port}) 연결에 실패했습니다. "
+            f"(감지된 Chrome PID: {pids or '없음'}, 마지막 오류: {last_err})"
+        )
 
     # 4. 사용자 화면 최상위로 활성화 및 혹시 남아있는 브라우저 복구/저장 버블 정리
-    def _find_chrome_window() -> int:
-        found = 0
-        def cb(h, _):
-            nonlocal found
-            if not found and win32gui.IsWindowVisible(h):
-                if win32gui.GetClassName(h) == "Chrome_WidgetWin_1":
-                    t = win32gui.GetWindowText(h)
-                    if "about:blank" in t or "TA-PRS" in t or "192.168" in t:
-                        found = h
-        win32gui.EnumWindows(cb, None)
-        return found
-
     win_deadline = time.time() + 3.0
-    chrome_h = 0
+    activated = False
     while time.time() < win_deadline:
-        chrome_h = _find_chrome_window()
-        if chrome_h:
+        if bring_chrome_to_front(port=port):
+            activated = True
             break
         time.sleep(0.2)
-
-    if chrome_h:
+    if activated:
+        debug_pids = _get_debug_chrome_pids(port)
+        def _maximize_cb(h, _):
+            if win32gui.IsWindowVisible(h) and win32gui.GetClassName(h) == "Chrome_WidgetWin_1":
+                _, pid = win32process.GetWindowThreadProcessId(h)
+                if pid in debug_pids:
+                    try:
+                        win32gui.ShowWindow(h, win32con.SW_MAXIMIZE)
+                    except Exception:
+                        pass
         try:
-            win32gui.ShowWindow(chrome_h, win32con.SW_MAXIMIZE)
-            win32gui.SetForegroundWindow(chrome_h)
+            win32gui.EnumWindows(_maximize_cb, None)
         except Exception:
             pass
     dismiss_chrome_bubbles(port=port, timeout=1.0)
