@@ -8,6 +8,7 @@
 - 한글 입력 시 "입력할 수 없는 문자가 포함되어 있습니다." 경고 감지
 """
 
+import ctypes
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import win32gui
@@ -15,8 +16,6 @@ import win32con
 import win32clipboard
 from PIL import ImageGrab
 from pywinauto import Application
-import pywinauto.keyboard as keyboard
-from pywinauto import mouse
 
 
 # 5가지 암호 안전성 기준 정규 명칭
@@ -63,9 +62,44 @@ class PasswordSafetyModalPage:
 
     def bring_to_front(self) -> None:
         """메인 창 활성화"""
-        from core.desktop_utils import bring_window_to_front
+        from core.desktop_utils import bring_window_to_front, switch_to_user_desktop
+        switch_to_user_desktop()
         if bring_window_to_front(self.hwnd):
             time.sleep(0.3)
+
+    def _click_element(self, elem, target_h: Optional[int] = None) -> None:
+        """
+        물리 마우스 이동(SetCursorPos) 없이 PostMessage로 요소를 클릭합니다.
+        PostMessage가 실패할 경우에만 click_input()으로 폴백합니다.
+        """
+        click_hwnd = target_h or self._get_target_hwnd()
+        try:
+            rect = elem.rectangle()
+            cx = (rect.left + rect.right) // 2
+            cy = (rect.top + rect.bottom) // 2
+            local_x, local_y = win32gui.ScreenToClient(click_hwnd, (cx, cy))
+            l_param = ((local_y & 0xFFFF) << 16) | (local_x & 0xFFFF)
+            win32gui.PostMessage(click_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, l_param)
+            time.sleep(0.06)
+            win32gui.PostMessage(click_hwnd, win32con.WM_LBUTTONUP, 0, l_param)
+        except Exception:
+            elem.click_input()
+
+    @staticmethod
+    def _post_key(target_h: int, vk_code: int) -> None:
+        """SendInput 없이 대상 창 핸들에 PostMessageW로 가상 키를 전송합니다."""
+        user32 = ctypes.windll.user32
+        user32.PostMessageW(target_h, win32con.WM_KEYDOWN, vk_code, 0)
+        time.sleep(0.01)
+        user32.PostMessageW(target_h, win32con.WM_KEYUP, vk_code, 0)
+
+    @staticmethod
+    def _post_text(target_h: int, text: str) -> None:
+        """SendInput 없이 대상 창 핸들에 PostMessageW(WM_CHAR)로 유니코드 문자열을 전송합니다."""
+        user32 = ctypes.windll.user32
+        for ch in text:
+            user32.PostMessageW(target_h, win32con.WM_CHAR, ord(ch), 0)
+            time.sleep(0.01)
 
     @classmethod
     def open_from_main(cls, main_page, timeout: float = 8.0) -> "PasswordSafetyModalPage":
@@ -134,7 +168,7 @@ class PasswordSafetyModalPage:
         try:
             close_btn.invoke()
         except Exception:
-            close_btn.click_input()
+            self._click_element(close_btn, target_h)
 
         start = time.time()
         while time.time() - start < timeout:
@@ -174,36 +208,60 @@ class PasswordSafetyModalPage:
                 return d
         raise RuntimeError("눈 아이콘(pw-toggle) 버튼을 찾을 수 없습니다.")
 
+    def _get_edit_value(self, edit) -> str:
+        """현재 입력 필드의 문자열 값 조회 (실패 시 빈 문자열 반환)"""
+        try:
+            return edit.iface_value.CurrentValue or ""
+        except Exception:
+            return ""
+
     def clear_password(self, timeout: float = 2.0) -> None:
         """입력창 텍스트 전체 삭제 및 초기화 반영 대기"""
+        target_h = self._get_target_hwnd()
         edit = self._get_edit_control()
-        r = edit.rectangle()
-        mouse.click(coords=(r.left + 50, r.top + 20))
-        time.sleep(0.15)
-        keyboard.send_keys("^a{BACKSPACE}")
+        try:
+            edit.set_focus()
+        except Exception:
+            pass
+        self._click_element(edit, target_h)
+        time.sleep(0.1)
+
+        cur_val = self._get_edit_value(edit)
+        del_count = max(len(cur_val) + 4, 24) if cur_val else 24
+        self._post_key(target_h, win32con.VK_END)
+        for _ in range(del_count):
+            self._post_key(target_h, win32con.VK_BACK)
+
         deadline = time.time() + timeout
         while time.time() < deadline:
+            cur_after = self._get_edit_value(edit)
             checklist = self.get_checklist_status()
-            if checklist and not any(checklist.values()):
+            if not cur_after and checklist and not any(checklist.values()):
                 return
             time.sleep(0.1)
 
     def type_password(self, pwd: str) -> None:
-        """암호 입력 필드에 키보드로 텍스트 입력"""
+        """암호 입력 필드에 텍스트 입력 (PostMessageW WM_CHAR 기반)"""
         self.clear_password()
         if pwd:
-            keyboard.send_keys(pwd, with_spaces=True)
+            target_h = self._get_target_hwnd()
+            self._post_text(target_h, pwd)
             time.sleep(0.2)
 
     def paste_text(self, text: str) -> None:
-        """클립보드를 통해 한글 또는 특수 텍스트 붙여넣기"""
+        """한글 또는 특수 텍스트 입력 (클립보드 보존 + PostMessageW WM_CHAR 전송)"""
         self.clear_password()
-        win32clipboard.OpenClipboard()
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
-        win32clipboard.CloseClipboard()
-        keyboard.send_keys("^v")
-        time.sleep(0.2)
+        if text:
+            try:
+                win32clipboard.OpenClipboard()
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+                win32clipboard.CloseClipboard()
+            except Exception:
+                pass
+            target_h = self._get_target_hwnd()
+            self._post_text(target_h, text)
+            time.sleep(0.2)
 
     def is_password_visible(self) -> bool:
         """
@@ -218,10 +276,14 @@ class PasswordSafetyModalPage:
         """
         눈 아이콘 버튼을 클릭하여 보임/숨김 토글 후, 변경된 상태(보임: True / 숨김: False)까지 대기 후 반환
         """
+        target_h = self._get_target_hwnd()
         eye_btn = self._get_eye_button()
         before_state = self.is_password_visible()
         print(f">>> [PasswordSafetyModal] 눈 아이콘 클릭 (현재 보이는 상태: {before_state})")
-        eye_btn.click_input()
+        try:
+            eye_btn.invoke()
+        except Exception:
+            self._click_element(eye_btn, target_h)
         deadline = time.time() + timeout
         while time.time() < deadline:
             after_state = self.is_password_visible()
