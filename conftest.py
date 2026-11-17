@@ -9,6 +9,14 @@ import sys
 from pathlib import Path
 import pytest
 
+# Testing UI 등 파이프 환경에서도 print() 로그가 즉시 출력되도록 줄 단위 버퍼링 활성화
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(line_buffering=True)
+        except Exception:
+            pass
+
 # win32gui/pywinauto 임포트 전에 프로세스 DPI 인식을 먼저 활성화 (좌표 밀림 방지)
 try:
     _u32 = ctypes.windll.user32

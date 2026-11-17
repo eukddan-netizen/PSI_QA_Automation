@@ -170,19 +170,34 @@ class AdminPcsafeManagePage(AdminBasePage):
         print(f">>> [관리자 웹] {item_no}번 항목 점수 변경 -> {score}점")
 
     def get_safety_score(self) -> int:
-        """우측 하단 '안전 기준 점수' 드롭다운의 현재 선택값(int) 조회"""
+        """우측 하단 '안전 기준 점수' 드롭다운의 현재 선택값(int) 조회 (공란이면 0점)"""
         sel = self._get_safety_score_select()
         sel.wait_for(state="visible", timeout=5000)
-        return int(sel.input_value().strip())
+        raw = sel.input_value().strip()
+        if not raw:
+            return 0
+        return int(raw)
 
     def set_safety_score(self, score: int) -> None:
-        """우측 하단 '안전 기준 점수' 드롭다운 값 변경 (예: 10, 100)"""
+        """우측 하단 '안전 기준 점수' 드롭다운 값 변경 (예: 0(공란), 10, 100)"""
         sel = self._get_safety_score_select()
         sel.wait_for(state="visible", timeout=5000)
-        sel.select_option(value=str(score))
+        target_val = str(score)
+        if score == 0:
+            target_val = sel.evaluate(
+                """el => {
+                    const opts = Array.from(el.options);
+                    const zeroOpt = opts.find(o => o.value.trim() === '0');
+                    if (zeroOpt) return zeroOpt.value;
+                    const emptyOpt = opts.find(o => o.value.trim() === '' || o.text.trim() === '');
+                    return emptyOpt ? emptyOpt.value : '0';
+                }"""
+            )
+        sel.select_option(value=target_val)
         self.page.wait_for_timeout(300)
         actual = sel.input_value().strip()
-        assert actual == str(score), f"안전 기준 점수 변경 실패: 기대={score}, 실제={actual}"
+        actual_score = 0 if not actual else int(actual)
+        assert actual_score == score, f"안전 기준 점수 변경 실패: 기대={score}, 실제={actual!r}"
         print(f">>> [관리자 웹] 안전 기준 점수 변경 -> {score}점")
 
     def _click_modal_button(self, button_text: str, timeout: float = 5.0) -> str:
