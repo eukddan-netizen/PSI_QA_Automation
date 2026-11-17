@@ -20,7 +20,7 @@ def run_standard_vulnerable_to_safe_flow(
     item_keyword: str,
     handler: Any,
     state_guard: StateGuard,
-    wait_seconds: int = 12,
+    wait_seconds: int = 25,
     inject_fn: Any = None,
 ) -> None:
     """

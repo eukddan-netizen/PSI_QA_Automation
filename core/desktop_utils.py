@@ -474,22 +474,32 @@ def launch_visible_chrome(port: int = 9222) -> _ChromeProcessHandle:
         raise TimeoutError(f"크롬 브라우저 CDP(포트 {port}) 연결에 실패했습니다.")
 
     # 4. 사용자 화면 최상위로 활성화 및 혹시 남아있는 브라우저 복구/저장 버블 정리
-    time.sleep(0.5)
-    def bring_top():
+    def _find_chrome_window() -> int:
+        found = 0
         def cb(h, _):
-            if win32gui.IsWindowVisible(h):
-                cls = win32gui.GetClassName(h)
-                if cls == "Chrome_WidgetWin_1":
+            nonlocal found
+            if not found and win32gui.IsWindowVisible(h):
+                if win32gui.GetClassName(h) == "Chrome_WidgetWin_1":
                     t = win32gui.GetWindowText(h)
                     if "about:blank" in t or "TA-PRS" in t or "192.168" in t:
-                        try:
-                            win32gui.ShowWindow(h, win32con.SW_MAXIMIZE)
-                            win32gui.SetForegroundWindow(h)
-                        except Exception:
-                            pass
+                        found = h
         win32gui.EnumWindows(cb, None)
+        return found
 
-    bring_top()
+    win_deadline = time.time() + 3.0
+    chrome_h = 0
+    while time.time() < win_deadline:
+        chrome_h = _find_chrome_window()
+        if chrome_h:
+            break
+        time.sleep(0.2)
+
+    if chrome_h:
+        try:
+            win32gui.ShowWindow(chrome_h, win32con.SW_MAXIMIZE)
+            win32gui.SetForegroundWindow(chrome_h)
+        except Exception:
+            pass
     dismiss_chrome_bubbles(port=port, timeout=1.0)
     return _ChromeProcessHandle(port)
 

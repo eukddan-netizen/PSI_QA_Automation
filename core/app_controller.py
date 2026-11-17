@@ -56,10 +56,26 @@ class AppController:
         self.hwnd: Optional[int] = None
 
     @classmethod
-    def kill_existing(cls):
-        """혹시 백그라운드에 남아있는 기존 프로세스 정리"""
-        os.system(f"taskkill /f /im {cls.EXE_NAME} >nul 2>&1")
-        time.sleep(1)
+    def kill_existing(cls, timeout: float = 5.0):
+        """혹시 백그라운드에 남아있는 기존 프로세스 정리 후 완전 종료 대기"""
+        subprocess.run(
+            ["taskkill", "/f", "/im", cls.EXE_NAME],
+            capture_output=True,
+            timeout=5,
+        )
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            res = subprocess.run(
+                ["tasklist", "/FI", f"IMAGENAME eq {cls.EXE_NAME}", "/NH"],
+                capture_output=True,
+                text=True,
+                encoding="cp949",
+                errors="replace",
+                timeout=3,
+            )
+            if cls.EXE_NAME.lower() not in (res.stdout or "").lower():
+                return
+            time.sleep(0.2)
 
     def bring_to_front(self) -> bool:
         """보안점검 메인 창을 최상단으로 활성화"""
@@ -375,26 +391,30 @@ class AppController:
                 win32gui.PostMessage(target_btn, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, 0)
                 time.sleep(0.05)
                 win32gui.PostMessage(target_btn, win32con.WM_LBUTTONUP, 0, 0)
-                time.sleep(0.4)
             except Exception:
                 pass
+
+            btn_deadline = time.time() + 1.0
+            while time.time() < btn_deadline:
+                if not win32gui.IsWindow(dlg_hwnd) or not win32gui.IsWindowVisible(dlg_hwnd):
+                    return True
+                time.sleep(0.1)
 
         # 2. 아직 안 닫혔다면 IDOK(1) 및 WM_CLOSE 전송
-        if win32gui.IsWindow(dlg_hwnd):
+        for msg, wparam in ((win32con.WM_COMMAND, 1), (win32con.WM_CLOSE, 0)):
+            if not win32gui.IsWindow(dlg_hwnd) or not win32gui.IsWindowVisible(dlg_hwnd):
+                return True
             try:
-                win32gui.PostMessage(dlg_hwnd, win32con.WM_COMMAND, 1, 0)
-                time.sleep(0.3)
+                win32gui.PostMessage(dlg_hwnd, msg, wparam, 0)
             except Exception:
                 pass
+            close_deadline = time.time() + 0.8
+            while time.time() < close_deadline:
+                if not win32gui.IsWindow(dlg_hwnd) or not win32gui.IsWindowVisible(dlg_hwnd):
+                    return True
+                time.sleep(0.1)
 
-        if win32gui.IsWindow(dlg_hwnd):
-            try:
-                win32gui.PostMessage(dlg_hwnd, win32con.WM_CLOSE, 0, 0)
-                time.sleep(0.3)
-            except Exception:
-                pass
-
-        return not win32gui.IsWindow(dlg_hwnd)
+        return not (win32gui.IsWindow(dlg_hwnd) and win32gui.IsWindowVisible(dlg_hwnd))
 
     def _wait_for_window(self, timeout: int = 15) -> Optional[int]:
         """사용자 모니터에 표시된 창 핸들 탐색"""
@@ -532,39 +552,41 @@ class AppController:
             if close_btn:
                 print(f">>> [AppController] 우상단 닫기 버튼(X) 클릭: {close_btn.rectangle()}")
                 _click_elem(close_btn)
-                time.sleep(0.5)
 
-            # 3. 우상단 X 클릭 후 창 상태 확인
-            # - 안전 기준 점수 이상: 팝업 없이 창이 바로 닫힘
-            # - 안전 기준 점수 미만: "종료하시겠습니까?" 팝업 노출 -> '종료' 버튼 클릭 필요
-            if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
-                print(">>> [AppController] 안전 기준 점수 충족 상태: 팝업 없이 즉시 종료 완료!")
-                return True
-
-            # 창이 아직 열려 있다면 확인 팝업 감지 시 '종료' 버튼 클릭
-            for _ in range(5):
+            # 3. 우상단 X 클릭 후 창 종료 또는 '종료' 확인 팝업 노출/종료 대기
+            close_deadline = time.time() + max(timeout, 4.0)
+            clicked_exit = False
+            while time.time() < close_deadline:
                 if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
-                    break
-                exit_btn = None
-                for b in win.descendants(control_type="Button"):
-                    if b.element_info.name == "종료":
-                        exit_btn = b
-                        break
-                if exit_btn:
-                    print(f">>> [AppController] 안전 기준 점수 미만 팝업 감지 -> '종료' 버튼 클릭: {exit_btn.rectangle()}")
-                    _click_elem(exit_btn)
-                    time.sleep(0.5)
-                    break
-                time.sleep(0.3)
+                    if not clicked_exit:
+                        print(">>> [AppController] 안전 기준 점수 충족 상태: 팝업 없이 즉시 종료 완료!")
+                    else:
+                        print(">>> [AppController] 보안점검 창 정상 종료 확인 완료!")
+                    return True
+
+                if not clicked_exit:
+                    exit_btn = None
+                    for b in win.descendants(control_type="Button"):
+                        if b.element_info.name == "종료":
+                            exit_btn = b
+                            break
+                    if exit_btn:
+                        print(f">>> [AppController] 안전 기준 점수 미만 팝업 감지 -> '종료' 버튼 클릭: {exit_btn.rectangle()}")
+                        _click_elem(exit_btn)
+                        clicked_exit = True
+                        time.sleep(0.2)
+                        continue
+                time.sleep(0.25)
         except Exception as e:
             print(f">>> [AppController] 닫기 버튼 상호작용 중 예외 발생: {e}")
 
-        # 4. 창 종료 여부 확인 대기
-        for _ in range(10):
+        # 4. 창 종료 여부 최종 확인 대기
+        final_deadline = time.time() + 2.0
+        while time.time() < final_deadline:
             if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
                 print(">>> [AppController] 보안점검 창 정상 종료 확인 완료!")
                 return True
-            time.sleep(0.3)
+            time.sleep(0.2)
 
         return not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd))
 
