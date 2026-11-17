@@ -128,11 +128,7 @@ def test_row21_shield_status_good(pcsafe_manage_page, app_ctrl):
     popup = main_page.wait_for_close_warning_popup(timeout=2.0)
     assert popup is None, f"안전 상태에서는 종료 경고 팝업이 뜨지 않아야 합니다: {popup}"
 
-    for _ in range(10):
-        if not main_page.is_window_visible():
-            break
-        time.sleep(0.3)
-    assert not main_page.is_window_visible(), "안전 상태에서 X 클릭 후 창이 즉시 닫히지 않았습니다."
+    assert main_page.wait_until_closed(timeout=3.0), "안전 상태에서 X 클릭 후 창이 즉시 닫히지 않았습니다."
 
 
 @pytest.mark.app_check
@@ -184,11 +180,7 @@ def test_row22_shield_status_vulnerable_and_close_warning(pcsafe_manage_page, ap
     assert popup2 is not None, "재닫기 시도 시 경고 팝업이 다시 노출되어야 합니다."
     assert main_page.click_popup_button("종료"), "경고 팝업 '종료' 버튼 클릭 실패"
 
-    for _ in range(10):
-        if not main_page.is_window_visible():
-            break
-        time.sleep(0.3)
-    assert not main_page.is_window_visible(), "경고 팝업에서 '종료' 클릭 후 창이 닫히지 않았습니다."
+    assert main_page.wait_until_closed(timeout=3.0), "경고 팝업에서 '종료' 클릭 후 창이 닫히지 않았습니다."
 
 
 @pytest.mark.app_check
@@ -214,12 +206,7 @@ def test_row23_start_inspection_button(app_ctrl):
     )
 
     result_page = InspectionResultPage(app_ctrl.hwnd)
-    stats = {}
-    for _ in range(10):
-        stats = result_page.get_summary_stats()
-        if "score_num" in stats and "total_num" in stats:
-            break
-        time.sleep(0.5)
+    stats = result_page.wait_for_result_ready(timeout=12.0)
     print(f">>> [Row 23 점검결과 요약] {stats}")
     assert "score_num" in stats and "total_num" in stats, (
         f"'점검결과' 탭 전환 후 결과 요약이 정상 표시되지 않았습니다: {stats}"

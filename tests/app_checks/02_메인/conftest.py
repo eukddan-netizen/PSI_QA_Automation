@@ -31,7 +31,6 @@ def pcsafe_manage_page():
 
         manage = AdminPcsafeManagePage(page)
         manage.login(username="admin", password="Qwe123!@#")
-        time.sleep(1)
         manage.goto_pcsafe_manage()
         manage.select_policy("t1")
         orig_snapshot = manage.get_policy_snapshot(item_nos=(1, 2))
@@ -68,11 +67,8 @@ def pcsafe_admin_page():
 
         admin = AdminPcsafePage(page)
         admin.login(username="admin", password="Qwe123!@#")
-        time.sleep(1)
         admin.goto_pcsafe()
-        time.sleep(1)
         admin.search_current_user_by_ip()
-        time.sleep(1)
 
         try:
             yield admin
@@ -100,7 +96,6 @@ def manage_config_page():
 
         manage_cfg = AdminManageConfigPage(page)
         manage_cfg.login(username="admin", password="Qwe123!@#")
-        time.sleep(1)
         manage_cfg.goto_manage_config()
         manage_cfg.select_tab("보안점검")
         orig_contact = manage_cfg.get_contact_text()

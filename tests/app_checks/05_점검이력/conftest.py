@@ -49,6 +49,7 @@ def history_test_session():
 
     main_page = MainPage(ctrl.hwnd)
     main_page.wait_for_main_ready(timeout=20.0)
+    pre_last_time = (main_page.get_user_info().get("last_inspection_time") or "").strip()
 
     # 1. 설정 > 정보 탭에서 앱 버전 수집
     settings_page = SettingsPage(ctrl.hwnd)
@@ -87,8 +88,14 @@ def history_test_session():
     # 4. 메인 탭 복귀 -> 보고서 서버 전송 및 최근점검일시 갱신 유도
     main_page.navigate_to_tab("메인")
     main_inspection_info = main_page.wait_for_main_ready(timeout=15.0)
-    time.sleep(1.5)
     main_user_info = main_page.get_user_info()
+    sync_deadline = time.time() + 6.0
+    while time.time() < sync_deadline:
+        cur_time = (main_user_info.get("last_inspection_time") or "").strip()
+        if cur_time and cur_time != pre_last_time:
+            break
+        time.sleep(0.25)
+        main_user_info = main_page.get_user_info()
     print(f">>> [05_history 선행] 메인 탭 사용자 정보: {main_user_info}")
 
     # 5. 점검이력 탭 이동 및 이력 목록 확인
@@ -113,7 +120,6 @@ def history_test_session():
         )
         restarted_due_to_100_overflow = True
         ctrl.close()
-        time.sleep(1.0)
         ctrl = AppController()
         ctrl.launch(timeout=20)
         assert ctrl.hwnd, "재실행 후 내PC보안점검 메인 창 실행 실패"
@@ -179,17 +185,25 @@ def server_history_data(history_test_session):
             try:
                 manage = AdminPcsafeManagePage(page)
                 manage.login(username="admin", password="Qwe123!@#")
-                time.sleep(1.0)
 
                 manage.goto_pcsafe_manage()
                 policy_name = manage.get_department_policy(dept_name)
                 manage.select_policy(policy_name)
                 safety_score = manage.get_safety_score()
 
+                expected_last_time = (main_user.get("last_inspection_time") or "").strip()
                 pcsafe = AdminPcsafePage(page)
                 pcsafe.goto_pcsafe()
                 pcsafe.search_current_user_by_ip()
                 server_user = pcsafe.get_user_details()
+                if expected_last_time and server_user.get("last_inspection_time") != expected_last_time:
+                    deadline = time.time() + 6.0
+                    while time.time() < deadline:
+                        time.sleep(0.5)
+                        pcsafe.refresh_user_search()
+                        server_user = pcsafe.get_user_details()
+                        if server_user.get("last_inspection_time") == expected_last_time:
+                            break
             finally:
                 try:
                     browser.close()

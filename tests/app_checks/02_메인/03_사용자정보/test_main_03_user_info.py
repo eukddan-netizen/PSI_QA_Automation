@@ -136,9 +136,15 @@ def test_row26_last_inspection_time_update_on_tab_navigation(pcsafe_admin_page, 
     main_page.navigate_to_tab("메인")
     main_page.wait_for_main_ready(timeout=10.0)
 
-    # 5. 갱신된 메인 화면 최근점검일시 획득
-    updated_info = main_page.get_user_info()
-    new_time_str = updated_info.get("last_inspection_time", "")
+    # 5. 갱신된 메인 화면 최근점검일시 획득 (비동기 서버 보고서 전송 반영 폴링 대기)
+    new_time_str = ""
+    sync_deadline = time.time() + 6.0
+    while time.time() < sync_deadline:
+        updated_info = main_page.get_user_info()
+        new_time_str = updated_info.get("last_inspection_time", "")
+        if new_time_str and new_time_str != prev_time_str:
+            break
+        time.sleep(0.25)
     print(f">>> [Row 26] 갱신된 메인 화면 최근점검일시: {new_time_str}")
 
     assert new_time_str, "최근점검일시 텍스트를 읽을 수 없습니다."
@@ -156,10 +162,16 @@ def test_row26_last_inspection_time_update_on_tab_navigation(pcsafe_admin_page, 
         f"(시각 차이: {time_diff:.1f}초)"
     )
 
-    # 7. 관리자 웹(/pcsafe) 최종 점검일 일치 검증
-    pcsafe_admin_page.refresh_user_search()
-    server_details = pcsafe_admin_page.get_user_details()
-    server_last_time = server_details.get("last_inspection_time", "")
+    # 7. 관리자 웹(/pcsafe) 최종 점검일 일치 검증 (서버 DB 반영 지연 대비 폴링)
+    server_last_time = ""
+    srv_deadline = time.time() + 6.0
+    while time.time() < srv_deadline:
+        pcsafe_admin_page.refresh_user_search()
+        server_details = pcsafe_admin_page.get_user_details()
+        server_last_time = server_details.get("last_inspection_time", "")
+        if server_last_time == new_time_str:
+            break
+        time.sleep(0.5)
     print(f">>> [Row 26] 관리자 웹(/pcsafe) 최종 점검일: {server_last_time}")
 
     assert server_last_time == new_time_str, (

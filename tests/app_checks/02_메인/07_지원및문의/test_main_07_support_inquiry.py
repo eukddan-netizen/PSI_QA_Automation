@@ -48,10 +48,9 @@ def test_main_support_inquiry_text_sync(manage_config_page, app_ctrl):
         # 2. '문의처' 행의 input에 'QA팀' 기입 후 저장
         print(f">>> [Step 2] '문의처'를 '{NEW_CONTACT_NAME}'으로 변경 후 저장")
         manage_cfg.set_contact_text(NEW_CONTACT_NAME)
-        time.sleep(1.0)
         manage_cfg.save_config()
         # 서버 DB 및 에이전트 정책 동기화 여유 대기
-        time.sleep(2.0)
+        time.sleep(1.5)
 
         # 3. 보안점검 프로그램 실행 (실행되어 있다면 재실행)
         print(">>> [Step 3] 보안점검 프로그램 실행")
@@ -77,18 +76,15 @@ def test_main_support_inquiry_text_sync(manage_config_page, app_ctrl):
             app_ctrl.close()
         except Exception:
             pass
-        time.sleep(1.0)
 
         print(f">>> [Step 5-2] 관리자 콘솔 웹 창 전면 활성화 및 문의처 '{DEFAULT_CONTACT_NAME}' 롤백 진행")
         manage_cfg.bring_to_front()
         manage_cfg.goto_manage_config()
         manage_cfg.select_tab("보안점검")
-        time.sleep(1.0)
 
         manage_cfg.set_contact_text(DEFAULT_CONTACT_NAME)
-        time.sleep(1.0)
         manage_cfg.save_config()
-        time.sleep(2.0)
+        time.sleep(1.5)
 
         # 6. 클라이언트 프로그램 재실행 후 '전산팀' 원복 검증
         print(">>> [Step 6] 보안점검 프로그램 재실행하여 롤백 상태 검증")

@@ -136,7 +136,6 @@ def test_row29_help_modal_language_switching(help_session):
 
     # 1. 'English'로 변경
     modal.change_language("English")
-    time.sleep(1.0)
 
     # 2. 영문 네비게이션 53개 항목 1:1 전수 일치 검증
     en_items = modal.get_nav_items_texts()
@@ -157,7 +156,6 @@ def test_row29_help_modal_language_switching(help_session):
 
     # 3. '한국어'로 원복
     modal.change_language("한국어")
-    time.sleep(1.0)
 
     # 4. 한글 복구 확인 (53개 항목 1:1 전수 일치 검증)
     ko_items = modal.get_nav_items_texts()
@@ -194,7 +192,6 @@ def test_row30_help_modal_accordion_dropdown_toggle(help_session):
 
     # 1. 1번 항목 진입
     modal.select_item(1)
-    time.sleep(0.5)
 
     # 2. 아코디언 버튼 확인
     buttons = modal.get_accordion_buttons()

@@ -31,6 +31,7 @@ def result_tab_session():
 
     main_page = MainPage(ctrl.hwnd)
     main_page.wait_for_main_ready(timeout=20.0)
+    pre_last_time = (main_page.get_user_info().get("last_inspection_time") or "").strip()
 
     print("\n>>> [04_inspection_result_tab 선행] 1단계: 점검 시작 및 점검결과 탭 자동 이동 대기...")
     main_page.click_start_inspection()
@@ -39,17 +40,25 @@ def result_tab_session():
         f"점검 완료 후 '점검결과' 탭으로 자동 이동하지 못했습니다. (감지 탭: {nav['tabs_seen']})"
     )
 
-    time.sleep(1.0)
+    result_page = InspectionResultPage(ctrl.hwnd)
+    result_page.wait_for_result_ready(timeout=15.0)
     print(">>> [04_inspection_result_tab 선행] 2단계: '메인' 탭으로 복귀하여 보고서 서버 전송 트리거...")
     main_page.navigate_to_tab("메인")
     main_inspection_info = main_page.wait_for_main_ready(timeout=15.0)
-    time.sleep(1.5)
+
+    # 최근점검일시가 이전 값에서 갱신될 때까지 폴링 대기
     main_user_info = main_page.get_user_info()
+    sync_deadline = time.time() + 6.0
+    while time.time() < sync_deadline:
+        cur_time = (main_user_info.get("last_inspection_time") or "").strip()
+        if cur_time and cur_time != pre_last_time:
+            break
+        time.sleep(0.25)
+        main_user_info = main_page.get_user_info()
     print(f">>> [04_inspection_result_tab 선행] 메인 탭 복귀 후 정보: score={main_inspection_info.get('score')}, user={main_user_info}")
 
     print(">>> [04_inspection_result_tab 선행] 3단계: '점검결과' 탭으로 재진입...")
     main_page.navigate_to_tab("점검결과")
-    result_page = InspectionResultPage(ctrl.hwnd)
     result_page.wait_for_result_ready(timeout=15.0)
 
     try:
@@ -91,7 +100,6 @@ def server_result_data(result_tab_session):
             try:
                 manage = AdminPcsafeManagePage(page)
                 manage.login(username="admin", password="Qwe123!@#")
-                time.sleep(1.0)
 
                 # 1. 보안점검 항목 관리(/pcsafeManage): 부서트리 정책 확인 -> 드롭다운 선택 -> 정책 테이블 수집
                 manage.goto_pcsafe_manage()
@@ -102,10 +110,19 @@ def server_result_data(result_tab_session):
                 active_items = [it for it in items if it["use"] == "사용"]
 
                 # 2. PC보안점검 관리(/pcsafe): 사용자 상세 정보 및 보고서 반영 결과 수집
+                expected_last_time = (result_tab_session["main_user_info"].get("last_inspection_time") or "").strip()
                 pcsafe = AdminPcsafePage(page)
                 pcsafe.goto_pcsafe()
                 pcsafe.search_current_user_by_ip()
                 server_user = pcsafe.get_user_details()
+                if expected_last_time and server_user.get("last_inspection_time") != expected_last_time:
+                    deadline = time.time() + 6.0
+                    while time.time() < deadline:
+                        time.sleep(0.5)
+                        pcsafe.refresh_user_search()
+                        server_user = pcsafe.get_user_details()
+                        if server_user.get("last_inspection_time") == expected_last_time:
+                            break
             finally:
                 try:
                     browser.close()

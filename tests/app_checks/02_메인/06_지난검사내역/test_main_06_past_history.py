@@ -19,6 +19,7 @@ import time
 import pytest
 
 from core.app_controller import AppController
+from pages.client.history_page import HistoryPage
 from pages.client.main_page import MainPage
 
 
@@ -123,22 +124,24 @@ def test_row34_all_six_bars_click_match_history_tab_records(history_session):
     hover_scores = history_session.get("hover_scores", [])
 
     # 1. 점검 기록이 없는 PC 환경 (bar_count == 0)
+    history_page = HistoryPage(main_page.hwnd)
     if bar_count == 0:
         print(">>> [TC 34] 막대가 0개이므로 '점검이력' 탭에도 레코드가 없는지 교차 검증합니다.")
         main_page.navigate_to_tab("점검이력")
-        time.sleep(1.0)
+        history_page.wait_for_history_list_ready(timeout=10.0)
         history_records = main_page.get_history_tab_records(limit=1)
         assert len(history_records) == 0, (
             f"메인 대시보드 그래프에는 막대가 없는데 점검이력 탭에는 {len(history_records)}건의 레코드가 존재합니다."
         )
         print(">>> [TC 34] 점검이력 탭에도 기록 0건 확인 완료. 메인 탭으로 복귀합니다.")
         main_page.navigate_to_tab("메인")
+        main_page.wait_for_main_ready(timeout=10.0)
         return
 
     # 2. 점검 기록이 1~6개 존재하는 환경
     print(f">>> [TC 34] '점검이력' 탭으로 이동하여 최근 {bar_count}건 점검 내역 수집...")
     main_page.navigate_to_tab("점검이력")
-    time.sleep(1.0)
+    history_page.wait_for_history_list_ready(timeout=10.0)
 
     history_records = main_page.get_history_tab_records(limit=bar_count)
     print(f">>> [TC 34] 점검이력 상위 {len(history_records)}건 파싱 완료:")
@@ -151,7 +154,7 @@ def test_row34_all_six_bars_click_match_history_tab_records(history_session):
 
     # 3. '메인' 탭으로 복귀
     main_page.navigate_to_tab("메인")
-    time.sleep(1.0)
+    main_page.wait_for_main_ready(timeout=10.0)
 
     # 4. N개 막대 각각 클릭하여 상세 페이지 일시/점수 1:1 역순 매핑 검증
     for bar_idx in range(bar_count):
@@ -164,7 +167,6 @@ def test_row34_all_six_bars_click_match_history_tab_records(history_session):
 
         print(f"\n--- [막대 {bar_idx + 1}/{bar_count} 검증] 기대 일시='{expected_time}', 기대 점수={expected_score}점 ---")
         main_page.click_past_history_bar(bar_idx)
-        time.sleep(1.2)
 
         # 활성 탭 및 상세 정보 확인
         active_tab = main_page.get_active_tab_name()
@@ -190,6 +192,6 @@ def test_row34_all_six_bars_click_match_history_tab_records(history_session):
         # 다음 막대 검증을 위해 '메인' 탭으로 복귀
         if bar_idx < bar_count - 1:
             main_page.navigate_to_tab("메인")
-            time.sleep(0.8)
+            main_page.wait_for_main_ready(timeout=10.0)
 
     print(f"\n>>> [TC 34] {bar_count}개 막대 그래프 전체의 점검이력 일시/점수 1:1 역순 매핑 전수 검증 성공!")

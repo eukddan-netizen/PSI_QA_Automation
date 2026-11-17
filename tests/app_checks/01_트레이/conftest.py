@@ -31,17 +31,13 @@ def admin_page():
 
         admin = AdminPcsafePage(page)
         admin.login(username="admin", password="Qwe123!@#")
-        time.sleep(1)
         admin.goto_pcsafe()
-        time.sleep(1)
         admin.search_current_user_by_ip()
-        time.sleep(1)
         yield admin
 
         # Teardown: 기본 상태(OFF)로 안전 원복 후 브라우저 닫기
         try:
             admin.set_hr_ui_status(target_state="OFF")
-            time.sleep(1)
         except Exception as e:
             print(f">>> Teardown 원복 중 예외: {e}")
         finally:
@@ -66,9 +62,7 @@ def patch_admin_page():
 
         patch_admin = AdminPatchPage(page)
         patch_admin.login(username="admin", password="Qwe123!@#")
-        time.sleep(1)
         patch_admin.goto_patch()
-        time.sleep(1)
         yield patch_admin
 
         try:

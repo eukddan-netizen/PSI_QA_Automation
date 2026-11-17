@@ -159,17 +159,27 @@ def test_step3_korean_input_warning_message(pwd_session):
     # 2. 한글 입력
     print(">>> [Step 3] 한글 텍스트('테스트한글') 입력")
     modal.paste_text("테스트한글")
-    time.sleep(0.5)
 
-    # 3. 경고 문구 검출
-    has_error = modal.has_invalid_char_error()
+    # 3. 경고 문구 검출 (렌더링 대기 포함)
+    has_error = False
+    dl = time.time() + 2.5
+    while time.time() < dl:
+        has_error = modal.has_invalid_char_error()
+        if has_error:
+            break
+        time.sleep(0.15)
     print(f">>> [Step 3] '입력할 수 없는 문자가 포함되어 있습니다.' 경고 감지: {has_error}")
     assert has_error, "한글 입력 시 빨간색 경고 문구가 표시되지 않았습니다."
 
     # 4. 허용된 영문 입력 시 경고 문구 해제 확인
     modal.type_password("ValidPassword123")
-    time.sleep(0.5)
-    has_error_after = modal.has_invalid_char_error()
+    has_error_after = True
+    dl2 = time.time() + 2.5
+    while time.time() < dl2:
+        has_error_after = modal.has_invalid_char_error()
+        if not has_error_after:
+            break
+        time.sleep(0.15)
     print(f">>> [Step 3] 정상 영문 입력 후 경고 해제 여부: {not has_error_after}")
     assert not has_error_after, "정상 영문 입력 후에도 경고 문구가 남아있습니다."
 
@@ -258,10 +268,27 @@ def test_step4_five_criteria_and_gauge_bar_progression(pwd_session):
 
         print(f"\n--- [검증 Step {s_num}/5] 입력: '{pwd}' ({desc}) ---")
         modal.type_password(pwd)
-        time.sleep(0.4)
 
-        # 1. 5개 체크리스트 상태 확인
-        checklist = modal.get_checklist_status()
+        # 1. 5개 체크리스트 및 등급/게이지 바 실시간 반영 대기
+        checklist = {}
+        grade = ""
+        bar_info = {}
+        dl = time.time() + 2.5
+        while time.time() < dl:
+            checklist = modal.get_checklist_status()
+            grade = modal.get_strength_grade()
+            bar_info = modal.get_gauge_bar_info()
+            pass_ok = all(checklist.get(it) is True for it in step_info["expected_pass"])
+            fail_ok = all(checklist.get(it) is False for it in step_info["expected_fail"])
+            if (
+                pass_ok
+                and fail_ok
+                and grade == step_info["expected_grade"]
+                and step_info["min_ratio"] <= bar_info["fill_ratio"] <= step_info["max_ratio"]
+                and bar_info["color"] == step_info["expected_color"]
+            ):
+                break
+            time.sleep(0.15)
         for item_pass in step_info["expected_pass"]:
             assert checklist.get(item_pass) is True, (
                 f"[Step {s_num}] '{item_pass}' 항목이 ✓(체크) 상태가 아닙니다."
@@ -273,14 +300,12 @@ def test_step4_five_criteria_and_gauge_bar_progression(pwd_session):
         print(f"  - 체크리스트 검증 통과: 통과 {len(step_info['expected_pass'])}개 / 미달 {len(step_info['expected_fail'])}개")
 
         # 2. 등급 텍스트 확인
-        grade = modal.get_strength_grade()
         print(f"  - 등급 텍스트: '{grade}' (기대치: '{step_info['expected_grade']}')")
         assert grade == step_info["expected_grade"], (
             f"[Step {s_num}] 등급 불일치: 기대='{step_info['expected_grade']}', 실제='{grade}'"
         )
 
         # 3. 게이지 바 비율 및 색상 확인
-        bar_info = modal.get_gauge_bar_info()
         ratio = bar_info["fill_ratio"]
         color = bar_info["color"]
         print(f"  - 게이지 바: 채워진 비율={ratio:.1f}% (허용: {step_info['min_ratio']}~{step_info['max_ratio']}%), 색상='{color}' (기대: '{step_info['expected_color']}')")

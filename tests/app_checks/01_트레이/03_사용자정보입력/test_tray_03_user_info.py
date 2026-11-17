@@ -52,12 +52,10 @@ def user_form():
 
     ctrl = AppController()
     ctrl.close_hr_ui()
-    time.sleep(0.5)
-
     ctrl.click_tray_menu_item("사용자 정보 입력")
-    time.sleep(1.5)
 
     form = UserInfoFormPage()
+    form.wait_until_ready(timeout=10.0)
     assert form.is_visible(), "트레이 아이콘 > '사용자 정보 입력' 클릭 시 화면에 입력 창이 노출되어야 합니다."
     yield form
 
