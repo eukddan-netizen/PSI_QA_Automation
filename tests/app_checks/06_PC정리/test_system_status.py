@@ -206,8 +206,10 @@ def clean_page():
 
 @pytest.mark.app_check
 @pytest.mark.app_clean
-def test_os_version_display(clean_page: CleanPage):
-    """PC정리 탭의 OS VERSION 정보와 실제 winver 정보 일치 검증"""
+def test_010_PC정리_OS버전_표시일치(clean_page: CleanPage):
+    """
+    [APP-06-01-010] PC정리 탭 OS VERSION 정보와 실제 Windows 정보 일치 검증
+    """
     winver = _get_winver_info()
     print(f"\n>>> [winver] edition='{winver['edition']}', version='{winver['display_version']}'")
     assert winver["edition"], f"winver에서 OS 에디션을 파싱하지 못했습니다: {winver['raw_texts']}"
@@ -226,8 +228,10 @@ def test_os_version_display(clean_page: CleanPage):
 
 @pytest.mark.app_check
 @pytest.mark.app_clean
-def test_antivirus_detection_match(clean_page: CleanPage):
-    """PC에 설치된 ANTIVIRUS 제품 목록 및 ON/OFF 상태와 PC정리 탭 UI 일치 검증"""
+def test_020_백신목록_및_상태_탐지일치(clean_page: CleanPage):
+    """
+    [APP-06-01-020] PC 설치 백신 제품 목록 및 ON/OFF 상태와 PC정리 탭 일치 검증
+    """
     pc_avs = _query_security_center("AntivirusProduct")
     print(f"\n>>> [PC SecurityCenter2 AntivirusProduct] {pc_avs}")
     assert pc_avs, "SecurityCenter2에서 조회된 백신 제품이 없습니다."
@@ -243,8 +247,10 @@ def test_antivirus_detection_match(clean_page: CleanPage):
 
 @pytest.mark.app_check
 @pytest.mark.app_clean
-def test_antivirus_status_sync(clean_page: CleanPage):
-    """실시간 보호 ON/OFF 전환 후 새로고침 아이콘 클릭 시 ANTIVIRUS 상태 동기화 검증"""
+def test_030_백신_실시간보호_전환_새로고침동기화(clean_page: CleanPage):
+    """
+    [APP-06-01-030] 백신 실시간 보호 전환 후 새로고침 시 상태 동기화 검증
+    """
     require_admin("백신 실시간 보호 기능 ON/OFF 제어에는 Windows 관리자 권한이 필요합니다.")
 
     pc_avs = _query_security_center("AntivirusProduct")
@@ -299,8 +305,10 @@ def test_antivirus_status_sync(clean_page: CleanPage):
 
 @pytest.mark.app_check
 @pytest.mark.app_clean
-def test_firewall_detection_match(clean_page: CleanPage):
-    """PC에 설치된 FIREWALL 목록 및 ON/OFF 상태와 PC정리 탭 UI 일치 검증"""
+def test_040_방화벽목록_및_상태_탐지일치(clean_page: CleanPage):
+    """
+    [APP-06-01-040] PC 방화벽 프로필 목록 및 ON/OFF 상태와 PC정리 탭 일치 검증
+    """
     profile_states = _get_windows_firewall_profile_states()
     win_fw_state = "ON" if any(v == "ON" for v in profile_states.values()) else "OFF"
 
@@ -319,8 +327,10 @@ def test_firewall_detection_match(clean_page: CleanPage):
 
 @pytest.mark.app_check
 @pytest.mark.app_clean
-def test_firewall_status_sync(clean_page: CleanPage):
-    """활성 상태인 방화벽 ON/OFF 전환 후 새로고침 아이콘 클릭 시 FIREWALL 상태 동기화 검증"""
+def test_050_방화벽_상태전환_새로고침동기화(clean_page: CleanPage):
+    """
+    [APP-06-01-050] 방화벽 ON/OFF 전환 후 새로고침 시 상태 동기화 검증
+    """
     require_admin("Windows 방화벽 ON/OFF 제어에는 Windows 관리자 권한이 필요합니다.")
 
     orig_profiles = _get_windows_firewall_profile_states()

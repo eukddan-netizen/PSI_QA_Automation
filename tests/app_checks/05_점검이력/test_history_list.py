@@ -21,9 +21,9 @@ def _normalize_ws(text: str) -> str:
 
 @pytest.mark.app_check
 @pytest.mark.app_history
-def test_history_recent_time_and_safety_score(history_test_session, server_history_data):
+def test_010_점검이력_최근일시_및_안전기준점수(history_test_session, server_history_data):
     """
-    [요구사항 1, 2]
+    [APP-05-01-010] 점검이력 탭 최근점검일시·안전기준점수와 메인/서버 정책 일치 검증
     1) 점검이력 탭 상단 '최근점검일시'와 메인 탭 '최근점검일시', 이력 1번 행 '점검 일시' 일치 검증
     2) 점검이력 탭 우측 상단 '안전기준점수'와 관리자 웹(/pcsafeManage) 부서 정책 안전기준점수 일치 검증
     """
@@ -74,13 +74,13 @@ def test_history_recent_time_and_safety_score(history_test_session, server_histo
 
 @pytest.mark.app_check
 @pytest.mark.app_history
-def test_history_list_max_100_limit(history_test_session):
+def test_020_점검이력_최대100건_유지제한(history_test_session):
     """
-    [요구사항 3]
+    [APP-05-01-020] 점검이력 목록 최대 100건 유지 및 최신순 정렬 제한 검증
     점검이력 리스트 최대 100건 제한 검증:
     - 평상시(점검 전): 100건 이하
     - 100건 상태에서 점검 실행 직후 일시적으로 100건을 초과한 경우에도,
-      보안점검 프로그램 재실행 시 최근 100건으로 유지되고 최신 이력이 1번에 위치해야 함
+    보안점검 프로그램 재실행 시 최근 100건으로 유지되고 최신 이력이 1번에 위치해야 함
     """
     pre_count = history_test_session["pre_count"]
     immediate_count = history_test_session["post_count_immediate"]
@@ -121,9 +121,9 @@ def test_history_list_max_100_limit(history_test_session):
 
 @pytest.mark.app_check
 @pytest.mark.app_history
-def test_history_latest_detail_user_info(history_test_session, server_history_data):
+def test_030_최신이력_상세_사용자정보_검증(history_test_session, server_history_data):
     """
-    [요구사항 4, 5]
+    [APP-05-01-030] 최신 점검이력 상세 내역 이동 및 사용자 환경 정보 정합성 검증
     점검 진행 후 가장 최근 점검이력(1번 행) 클릭 -> 점검 상세 내역 이동 및
     사용자 정보(점검일시, 사용자 IP, 사용자명, 부서명, OS 정보, 바이러스백신, 버전) 검증
     """
@@ -202,9 +202,9 @@ def test_history_latest_detail_user_info(history_test_session, server_history_da
 
 @pytest.mark.app_check
 @pytest.mark.app_history
-def test_history_detail_results_match_inspection_result_tab(history_test_session):
+def test_040_이력상세_점검결과탭_데이터일치(history_test_session):
     """
-    [요구사항 6]
+    [APP-05-01-040] 점검이력 상세 요약·항목 결과가 현재 점검결과 탭과 100% 일치 검증
     점검 상세 내역의 요약 수치 및 각 항목별 결과/항목명/상세설명이
     현재 점검결과 탭의 데이터와 100% 일치하는지 검증
     """
@@ -292,9 +292,9 @@ def test_history_detail_results_match_inspection_result_tab(history_test_session
 
 @pytest.mark.app_check
 @pytest.mark.app_history
-def test_history_detail_toggle_all_and_individual(history_test_session):
+def test_050_이력상세_전체및개별_토글동작(history_test_session):
     """
-    [요구사항 7]
+    [APP-05-01-050] 점검이력 상세 화면 전체 열기/닫기 및 개별 아코디언 토글 검증
     '전체 열기' / '전체 닫기' 토글 버튼 및 개별 행 아코디언 토글 기능 동작 검증
     """
     history_page: HistoryPage = history_test_session["history_page"]

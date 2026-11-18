@@ -17,8 +17,10 @@ from pages.client.settings_page import SettingsPage
 
 @pytest.mark.app_check
 @pytest.mark.app_settings
-def test_auto_navigation_default_checked(settings_session):
-    """[Row 59] '점검 후 결과 화면으로 자동 이동' 옵션의 기본값이 체크 상태인지 검증"""
+def test_010_결과화면_자동이동_기본체크확인(settings_session):
+    """
+    [APP-07-01-010] 설정 '점검 후 결과 화면으로 자동 이동' 기본 체크 상태 검증
+    """
     settings_page: SettingsPage = settings_session["settings_page"]
 
     is_checked = settings_page.get_auto_navigate_checked(timeout=10.0)
@@ -29,8 +31,10 @@ def test_auto_navigation_default_checked(settings_session):
 @pytest.mark.app_check
 @pytest.mark.app_settings
 @pytest.mark.parametrize("start_tab", ["메인", "점검"])
-def test_auto_navigation_disabled_popup_flow(settings_session, start_tab: str):
-    """[Row 59~60] 자동 이동 해제 후 메인/점검 탭에서 점검 완료 시 팝업 노출 및 버튼 클릭 이동 검증"""
+def test_020_자동이동_해제시_완료팝업_및_이동(settings_session, start_tab: str):
+    """
+    [APP-07-01-020] 자동 이동 해제 후 점검 완료 시 알림 팝업 노출 및 결과 이동 검증
+    """
     ctrl = settings_session["ctrl"]
     settings_page: SettingsPage = settings_session["settings_page"]
 

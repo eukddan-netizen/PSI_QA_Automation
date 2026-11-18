@@ -26,9 +26,9 @@ def _expected_excel_filename(inspection_time: str) -> str:
 
 @pytest.mark.app_check
 @pytest.mark.app_history
-def test_excel_export_save_to_desktop_and_validate_content(history_test_session, server_history_data):
+def test_010_점검이력_엑셀내보내기_정합성(history_test_session, server_history_data):
     """
-    [요구사항 8]
+    [APP-05-02-010] 점검이력 엑셀 내보내기 저장 및 파일명·본문 데이터 정합성 검증
     우측 상단 엑셀 아이콘 클릭 -> 바탕화면 저장 -> 완료 팝업 확인 ->
     저장된 엑셀 파일의 파일명, 사용자정보, 점검결과/점수 데이터와 단위, 전체 항목명/상세설명 정합성 검증
     """

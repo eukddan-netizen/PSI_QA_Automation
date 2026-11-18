@@ -50,8 +50,10 @@ def _assert_light_theme(settings_page: SettingsPage, label: str) -> None:
 
 @pytest.mark.app_check
 @pytest.mark.app_settings
-def test_default_theme_is_dark(settings_session):
-    """[Row 64] 최초 실행/로딩 화면 및 설정 > 외형 기본값이 다크 모드인지 검증"""
+def test_010_최초실행_기본테마_다크모드(settings_session):
+    """
+    [APP-07-02-010] 최초 실행 화면 및 설정 > 외형 기본값 다크 모드 검증
+    """
     settings_page: SettingsPage = settings_session["settings_page"]
     launch_rgb = settings_session["launch_rgb"]
     dark_snap = settings_session["initial_dark_snap"]
@@ -82,8 +84,10 @@ def test_default_theme_is_dark(settings_session):
 
 @pytest.mark.app_check
 @pytest.mark.app_settings
-def test_version_info_display(settings_session):
-    """[Row 65] 설정 > 정보 탭 '앱 버전'과 관리자 웹(/manageAgent) 최근 등록 정보의 taKeeper.exe 버전 일치 검증"""
+def test_020_설정_정보탭_앱버전_서버일치(settings_session):
+    """
+    [APP-07-02-020] 설정 > 정보 탭 앱 버전과 관리자 웹 등록 에이전트 버전 일치 검증
+    """
     settings_page: SettingsPage = settings_session["settings_page"]
     client_version = settings_page.get_app_version(timeout=10.0)
     print(f"\n>>> [설정 > 정보] 클라이언트 앱 버전: '{client_version}'")
@@ -122,8 +126,10 @@ def test_version_info_display(settings_session):
 
 @pytest.mark.app_check
 @pytest.mark.app_settings
-def test_theme_mode_toggle_and_integrity(settings_session):
-    """[Row 61~63] 라이트 모드 전환, 재실행 영속성 및 전체 탭/기능 UI 무결성 검증"""
+def test_030_라이트모드_전환_영속성_UI무결성(settings_session):
+    """
+    [APP-07-02-030] 라이트 모드 전환·재실행 영속성 및 전체 탭 UI 무결성 검증
+    """
     ctrl = settings_session["ctrl"]
     settings_page: SettingsPage = settings_session["settings_page"]
 

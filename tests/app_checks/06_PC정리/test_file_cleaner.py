@@ -211,8 +211,10 @@ def clean_page():
 
 @pytest.mark.app_check
 @pytest.mark.app_clean
-def test_clean_checkbox_hierarchy(clean_page: CleanPage):
-    """내 PC 정리 트리 체크박스(전체 / Windows / 웹 브라우저) 일괄 선택·해제 검증"""
+def test_010_PC정리_트리체크박스_일괄선택해제(clean_page: CleanPage):
+    """
+    [APP-06-02-010] PC정리 트리 체크박스(전체·Windows·브라우저) 일괄 선택/해제 검증
+    """
     title = "체크박스 계층 선택·해제"
     _print_section_header(title)
     try:
@@ -244,8 +246,10 @@ def test_clean_checkbox_hierarchy(clean_page: CleanPage):
 
 @pytest.mark.app_check
 @pytest.mark.app_clean
-def test_clean_temp_files(clean_page: CleanPage):
-    """더미 임시파일 생성 후 '윈도우 임시 파일' 정리 실행 시 실제 삭제 검증"""
+def test_020_윈도우_임시파일_정리_삭제검증(clean_page: CleanPage):
+    """
+    [APP-06-02-020] 더미 임시파일 생성 후 윈도우 임시 파일 정리 실제 삭제 검증
+    """
     title = "윈도우 임시 파일"
     temp_dir = Path(os.environ["TEMP"])
     dummy_file = temp_dir / f"psi_clean_temp_dummy_{int(time.time())}.tmp"
@@ -267,8 +271,10 @@ def test_clean_temp_files(clean_page: CleanPage):
 
 @pytest.mark.app_check
 @pytest.mark.app_clean
-def test_clean_recycle_bin(clean_page: CleanPage):
-    """휴지통 비우기 실행 후 완료 팝업 및 실제 휴지통 비워짐 검증"""
+def test_030_휴지통_비우기_실행_삭제검증(clean_page: CleanPage):
+    """
+    [APP-06-02-030] 휴지통 비우기 실행 후 완료 팝업 및 실제 비워짐 검증
+    """
     title = "휴지통 비우기"
     temp_dir = Path(os.environ["TEMP"])
     dummy_file = temp_dir / f"psi_clean_rb_dummy_{int(time.time())}.tmp"
@@ -294,9 +300,9 @@ def test_clean_recycle_bin(clean_page: CleanPage):
 @pytest.mark.app_check
 @pytest.mark.app_clean
 @pytest.mark.parametrize("category", list(BROWSER_CLEAN_TARGETS.keys()))
-def test_clean_browser_items(clean_page: CleanPage, category: str):
+def test_040_웹브라우저_항목별_정리검증(clean_page: CleanPage, category: str):
     """
-    웹 브라우저 항목별 정리 검증:
+    [APP-06-02-040] 웹 브라우저(Chrome·Edge) 항목별 캐시·쿠키 정리 검증
     - Chrome > Edge 순서, Default > Profile 1 > Profile 2 순서로 존재하는 프로필 대상 확인
     - 미존재 경로는 테스트용 더미 생성 후 삭제 여부 검증
     - 브라우저가 실행 중인 경우 OS 잠금 파일은 제외하고 오류 팝업 없이 완료되는지 검증

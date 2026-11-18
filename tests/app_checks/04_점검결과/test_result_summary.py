@@ -11,9 +11,9 @@ from pages.client.inspection_result_page import InspectionResultPage
 
 @pytest.mark.app_check
 @pytest.mark.app_result
-def test_result_shield_and_score_integrity(result_tab_session, server_result_data):
+def test_010_점검결과_방패_점수_정합성(result_tab_session, server_result_data):
     """
-    [요구사항 1] 방패 아이콘 및 종합 점수 확인, 서버 안전기준점수에 따른 결과('양호'/'위험') 정합성 검증
+    [APP-04-01-010] 점검결과 탭 방패 아이콘·종합 점수 및 서버 안전기준점수 정합성 검증
     """
     result_page: InspectionResultPage = result_tab_session["result_page"]
     main_inspection_info = result_tab_session["main_inspection_info"]
@@ -52,9 +52,9 @@ def test_result_shield_and_score_integrity(result_tab_session, server_result_dat
 
 @pytest.mark.app_check
 @pytest.mark.app_result
-def test_result_user_info_matches_main_and_server(result_tab_session, server_result_data):
+def test_020_점검결과_사용자정보_서버정합성(result_tab_session, server_result_data):
     """
-    [요구사항 2] 점검결과 탭 사용자 정보 데이터(OS, 부서명, 사용자명, IP, 최근점검일시)와
+    [APP-04-01-020] 점검결과 탭 사용자 정보와 메인 탭 및 관리자 웹 보고서 일치 검증
     메인 탭 및 관리자 웹(/pcsafe) 보고서 반영 데이터 일치 검증
     """
     result_page: InspectionResultPage = result_tab_session["result_page"]
@@ -111,9 +111,9 @@ def test_result_user_info_matches_main_and_server(result_tab_session, server_res
 
 @pytest.mark.app_check
 @pytest.mark.app_result
-def test_result_policy_alignment_and_vuln_buttons(result_tab_session, server_result_data):
+def test_030_서버정책_항목정합성_및_조치버튼(result_tab_session, server_result_data):
     """
-    [요구사항 3] 서버 항목관리(/pcsafeManage) 부서 적용 정책과 점검결과 탭 데이터 비교 검증:
+    [APP-04-01-030] 관리자 웹 부서 적용 정책과 점검결과 항목·배점·조치 버튼 노출 검증
     - 사용자 부서 -> 좌측 부서트리 적용 정책 확인 -> 정책 선택 -> 우측 테이블 정책 추출
     - 활성 점검 항목 개수/번호/항목명 일치
     - 점수 배점 합산 일치
@@ -176,9 +176,9 @@ def test_result_policy_alignment_and_vuln_buttons(result_tab_session, server_res
 
 @pytest.mark.app_check
 @pytest.mark.app_result
-def test_result_summary_counts_match_table(result_tab_session):
+def test_040_상단요약건수_결과테이블_일치(result_tab_session):
     """
-    [요구사항 4] 상단 요약 건수(전체, 안전, 취약, 점검불가)와 하단 결과 리스트 행 개수 일치 검증
+    [APP-04-01-040] 점검결과 상단 요약 건수(전체·안전·취약·불가)와 테이블 행 개수 일치 검증
     """
     result_page: InspectionResultPage = result_tab_session["result_page"]
     stats = result_page.get_summary_stats()

@@ -10,8 +10,10 @@ from pages.client.inspection_result_page import InspectionResultPage
 
 @pytest.mark.app_check
 @pytest.mark.app_result
-def test_sort_by_number_column(result_tab_session):
-    """[Row 69] 1열 '번호' 헤더 2회 클릭 시 오름차순 -> 내림차순 정렬 검증"""
+def test_010_번호열_오름내림차순_정렬(result_tab_session):
+    """
+    [APP-04-02-010] 점검결과 테이블 '번호' 헤더 클릭 시 오름·내림차순 정렬 검증
+    """
     result_page: InspectionResultPage = result_tab_session["result_page"]
 
     initial_rows = result_page.get_all_result_rows()
@@ -35,8 +37,10 @@ def test_sort_by_number_column(result_tab_session):
 
 @pytest.mark.app_check
 @pytest.mark.app_result
-def test_sort_by_item_name_column(result_tab_session):
-    """[Row 70] 2열 '점검 항목' 헤더 2회 클릭 시 오름차순 -> 내림차순 정렬 검증"""
+def test_020_점검항목열_오름내림차순_정렬(result_tab_session):
+    """
+    [APP-04-02-020] 점검결과 테이블 '점검 항목' 헤더 클릭 시 오름·내림차순 정렬 검증
+    """
     result_page: InspectionResultPage = result_tab_session["result_page"]
 
     initial_rows = result_page.get_all_result_rows()
@@ -64,8 +68,10 @@ def test_sort_by_item_name_column(result_tab_session):
 
 @pytest.mark.app_check
 @pytest.mark.app_result
-def test_sort_by_result_column(result_tab_session):
-    """[Row 71] 3열 '결과' 헤더 2회 클릭 시 상태별 그룹 오름/내림차순 정렬 검증"""
+def test_030_결과열_상태별_정렬(result_tab_session):
+    """
+    [APP-04-02-030] 점검결과 테이블 '결과' 헤더 클릭 시 상태 그룹별 정렬 검증
+    """
     result_page: InspectionResultPage = result_tab_session["result_page"]
 
     # 1회 클릭 -> 상태별 정렬 (안전 먼저, 취약 나중)
