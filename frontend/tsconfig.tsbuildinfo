@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/executionstream.tsx","./src/components/statusbadge.tsx","./src/components/summarystrip.tsx","./src/components/testtreepanel.tsx","./src/components/topbar.tsx","./src/hooks/useautofocus.ts","./src/hooks/userunstream.ts","./src/types/run.ts"],"version":"5.9.3"}

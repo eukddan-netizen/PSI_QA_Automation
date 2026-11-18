@@ -1,0 +1,196 @@
+export type TestStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped' | 'error' | 'warning'
+export type RunStatus = 'idle' | 'running' | 'completed' | 'failed' | 'stopped'
+export type LogStream = 'stdout' | 'stderr' | 'system'
+export type LogLevel = 'info' | 'step' | 'warn' | 'error' | 'success'
+
+export interface EnvironmentInfo {
+  os: string
+  hostname: string
+  ip: string
+  python_version: string
+  is_admin: boolean
+}
+
+export interface LogLine {
+  seq: number
+  timestamp: string
+  stream: LogStream
+  level: LogLevel
+  stage?: string | null
+  text: string
+  nodeid?: string | null
+}
+
+export interface TestCaseState {
+  nodeid: string
+  tc_id?: string
+  id: string
+  title: string
+  docstring: string
+  domain: string
+  domain_title: string
+  category_id: string
+  category_title: string
+  subcategory_id?: string | null
+  subcategory_title?: string | null
+  markers: string[]
+  status: TestStatus
+  duration?: number | null
+  started_at?: string | null
+  finished_at?: string | null
+  summary: string
+  error_message: string
+  logs: LogLine[]
+}
+
+export interface RunSummary {
+  total: number
+  completed: number
+  passed: number
+  failed: number
+  skipped: number
+  running: number
+  pending: number
+  pass_rate: number
+  duration_sec: number
+}
+
+export interface RunState {
+  run_id: string
+  title: string
+  target: string
+  status: RunStatus
+  started_at: string
+  finished_at?: string | null
+  environment: EnvironmentInfo
+  summary: RunSummary
+  cases: TestCaseState[]
+  session_logs: LogLine[]
+  active_nodeid?: string | null
+}
+
+export interface RunListItem {
+  run_id: string
+  title: string
+  target: string
+  status: RunStatus
+  started_at: string
+  finished_at?: string | null
+  summary: RunSummary
+}
+
+export interface CatalogPreset {
+  id: string
+  label: string
+  domain: string
+  markers?: string | null
+  paths: string[]
+  description: string
+}
+
+export interface RunnerStatus {
+  is_running: boolean
+  active_run_id?: string | null
+  is_admin: boolean
+}
+
+export interface CategoryGroup {
+  key: string
+  domain: string
+  categoryId: string
+  title: string
+  status: TestStatus
+  total: number
+  passed: number
+  failed: number
+  skipped: number
+  running: number
+  pending: number
+  duration: number
+  cases: TestCaseState[]
+}
+
+export interface DomainGroup {
+  domain: string
+  title: string
+  status: TestStatus
+  total: number
+  passed: number
+  failed: number
+  skipped: number
+  running: number
+  categories: CategoryGroup[]
+}
+
+export function deriveAggregateStatus(items: { status: TestStatus }[]): TestStatus {
+  if (items.some((i) => i.status === 'running')) return 'running'
+  if (items.some((i) => i.status === 'failed' || i.status === 'error')) return 'failed'
+  if (items.length > 0 && items.every((i) => i.status === 'skipped')) return 'skipped'
+  if (items.length > 0 && items.every((i) => i.status === 'passed' || i.status === 'skipped')) return 'passed'
+  if (items.some((i) => i.status === 'passed')) return 'running'
+  return 'pending'
+}
+
+export function buildHierarchyTree(cases: TestCaseState[]): DomainGroup[] {
+  const domainMap = new Map<string, { title: string; catMap: Map<string, CategoryGroup> }>()
+
+  for (const c of cases) {
+    let dom = domainMap.get(c.domain)
+    if (!dom) {
+      dom = { title: c.domain_title, catMap: new Map() }
+      domainMap.set(c.domain, dom)
+    }
+
+    const catKey = `${c.domain}::${c.category_id}`
+    let cat = dom.catMap.get(catKey)
+    if (!cat) {
+      cat = {
+        key: catKey,
+        domain: c.domain,
+        categoryId: c.category_id,
+        title: c.category_title,
+        status: 'pending',
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+        running: 0,
+        pending: 0,
+        duration: 0,
+        cases: [],
+      }
+      dom.catMap.set(catKey, cat)
+    }
+
+    cat.cases.push(c)
+    cat.total += 1
+    if (c.status === 'passed') cat.passed += 1
+    else if (c.status === 'failed' || c.status === 'error') cat.failed += 1
+    else if (c.status === 'skipped') cat.skipped += 1
+    else if (c.status === 'running') cat.running += 1
+    else cat.pending += 1
+    cat.duration += c.duration ?? 0
+  }
+
+  const result: DomainGroup[] = []
+  for (const [domain, domVal] of domainMap.entries()) {
+    const categories = Array.from(domVal.catMap.values()).map((cat) => ({
+      ...cat,
+      status: deriveAggregateStatus(cat.cases),
+    }))
+    const allCases = categories.flatMap((cat) => cat.cases)
+    result.push({
+      domain,
+      title: domVal.title,
+      status: deriveAggregateStatus(categories),
+      total: allCases.length,
+      passed: categories.reduce((acc, cat) => acc + cat.passed, 0),
+      failed: categories.reduce((acc, cat) => acc + cat.failed, 0),
+      skipped: categories.reduce((acc, cat) => acc + cat.skipped, 0),
+      running: categories.reduce((acc, cat) => acc + cat.running, 0),
+      categories,
+    })
+  }
+
+  return result
+}
