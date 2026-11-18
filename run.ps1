@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Position = 0)]
     $Target,
     [Parameter(Position = 1)]
@@ -39,12 +39,12 @@ if ([string]::IsNullOrWhiteSpace($Target)) {
     Write-Host ""
     Write-Host "  [기타]" -ForegroundColor Yellow
     Write-Host "    .\run list           전체 pytest 테스트 목록 수집 확인"
-    Write-Host "    .\run dashboard      로컬 QA 대시보드 웹 서버 실행 (http://127.0.0.1:8000)"
+    Write-Host "    .\run 대시보드       (또는 dashboard)  로컬 QA 대시보드 웹 서버 실행 (http://127.0.0.1:8000)"
     Write-Host "    .\run <대상> -Dashboard  대시보드로 실시간 로그 스트리밍하며 실행"
     exit 0
 }
 
-if ($Target -eq "dashboard") {
+if ($Target -eq "dashboard" -or $Target -eq "대시보드" -or $Target -eq "dash") {
     & (Join-Path $PSScriptRoot "run_dashboard.ps1")
     exit $LASTEXITCODE
 }
