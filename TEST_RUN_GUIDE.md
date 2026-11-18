@@ -51,9 +51,15 @@
 .\run main 3          # main_03 (사용자 정보)
 .\run main 1-2        # main_01 ~ main_02 연속 실행
 
+# 3. 로컬 QA 웹 대시보드에서 실시간 시각화 및 보고서 추출
+.\run.ps1 dashboard
+
+# 4. 기존 CLI 실행과 대시보드 실시간 스트리밍 동시 연동
+.\run.ps1 app -Dashboard
+
 # 단일 탭 내 특정 테스트 함수만 필터링 (-k 인자 전달)
-.\run inspection user_info   # test_inspection_tab_user_info_matches_main 만 실행
-.\run inspection start       # test_inspection_start_realtime_and_auto_navigation 만 실행
+.\run inspection 사용자정보   # test_010_점검탭_사용자정보_메인일치 만 실행
+.\run inspection 실시간반영   # test_020_점검진행_실시간반영_및_결과탭이동 만 실행
 ```
 
 ---
@@ -70,11 +76,17 @@
 
 ---
 
-### 2-3. 목록 확인 및 도움말
+### 2-3. 목록 확인 및 QA 웹 대시보드 연동
 ```powershell
-.\run           # 전체 단축 실행 사용법 출력
-.\run list      # pytest가 수집 가능한 전체 테스트 노드 목록 출력 (--collect-only -q)
+.\run                     # 전체 단축 실행 사용법 출력
+.\run list                # pytest가 수집 가능한 전체 테스트 노드 목록 출력 (--collect-only -q)
+.\run dashboard           # 로컬 QA 웹 대시보드 실행 (http://127.0.0.1:8000)
+.\run app -Dashboard      # CLI 테스트 실행 로그를 대시보드로 실시간 스트리밍
 ```
+
+* **TC_ID 명명 규칙**:
+  * `app_checks`: `APP-{대분류2자리}-{중분류2자리}-{순번3자리}` (예: `APP-01-01-010`, 중간 삽입 시 `015` 등 사용)
+  * `security_checks`: `SEC-{점검번호2자리}-{순번3자리}` (예: `SEC-07-010` ~ `040`)
 
 ---
 

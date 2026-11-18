@@ -44,6 +44,10 @@ Windows 데스크톱 보안점검 프로그램(`taKeeper.exe`, CefSharp 임베�
 
 # 전체 점검 및 테스트 목록 확인
 .\run list
+
+# 로컬 QA 웹 대시보드 실행 (실시간 로그 스트리밍 & 정부 양식 Excel/Word 보고서 추출)
+.\run dashboard
+.\run app -Dashboard
 ```
 
 > **Tip (앞에 `.\`도 빼고 그냥 `run 14`로 치고 싶을 때)**  
@@ -127,7 +131,19 @@ d:\psi_automation/
 │
 ├─ common/                      # 전 점검 공통 인프라
 │  ├─ os_utils.py               # 레지스트리/명령어 제어, StateGuard 원복 가드, 동적 핸들러 로더
-│  └─ check_harness.py          # 5단계 표준 점검 테스트 흐름 공통 실행기
+│  ├─ check_harness.py          # 5단계 표준 점검 테스트 흐름 공통 실행기
+│  └─ dashboard_logger.py       # 대시보드 단계별 구조화 로그 헬퍼
+│
+├─ dashboard/                   # 로컬 QA 웹 대시보드 백엔드 (FastAPI + SSE + 보고서 엔진)
+│  ├─ main.py                   # FastAPI 서버 및 빌드된 React 정적 파일 서빙
+│  ├─ pytest_plugin.py          # 기존 테스트 무수정 연동 pytest 훅 + stdout tee 스트리밍
+│  ├─ store.py                  # 스레드 안전 RunStore + SQLite/JSONL 영속화
+│  ├─ runner_manager.py         # UI 기반 테스트 실행·중단 제어
+│  ├─ routers/                  # runs, catalog, reports REST/SSE 엔드포인트
+│  └─ reports/                  # 대한민국 정부 양식(.xlsx / .docx) 개조식 보고서 생성기
+│
+├─ frontend/                    # React + TypeScript + Vite QA 대시보드 UI 소스
+│  └─ src/                      # 계층 트리, 스마트 토글·자동 포커스, 다크/라이트 테마 UI
 │
 ├─ pages/                       # Page Object 디렉터리 (Server 웹 콘솔 & Client 데스크톱 분리)
 │  ├─ server/                   # 🌐 관리 서버 웹 콘솔 (Playwright 기반, https://192.168.4.151)
@@ -155,6 +171,7 @@ d:\psi_automation/
 │  └─ uia_dump.py               # 현재 열린 내PC보안점검 창의 모든 UIA 요소를 파일/콘솔로 덤프
 │
 ├─ run.bat / run.ps1            # 번호만 입력해 점검을 즉시 실행하는 단축 러너 스크립트
+├─ run_dashboard.ps1            # 로컬 QA 웹 대시보드 전용 런처 (포트 충돌 자동 정리 포함)
 ├─ conftest.py                  # 실패 시에도 원복을 100% 보장하는 state_guard fixture
 ├─ pytest.ini                   # importlib 격리 모드 및 점검별(check01~check53)/Tier별 마커 정의
 └─ requirements.txt             # 의존성 라이브러리 목록 (pywinauto, pyyaml 등)
