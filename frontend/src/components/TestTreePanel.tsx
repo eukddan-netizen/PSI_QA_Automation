@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Search } from 'lucide-react'
 import type { DomainGroup, TestStatus } from '../types/run'
 import { StatusDot } from './StatusBadge'
 
 interface TestTreePanelProps {
+  runId?: string | null
   domains: DomainGroup[]
   activeNodeId?: string | null
   statusFilter: 'all' | 'failed' | 'running' | 'passed'
@@ -12,6 +13,7 @@ interface TestTreePanelProps {
 }
 
 export function TestTreePanel({
+  runId,
   domains,
   activeNodeId,
   statusFilter,
@@ -19,8 +21,55 @@ export function TestTreePanel({
   onSelectCase,
 }: TestTreePanelProps) {
   const [query, setQuery] = useState('')
-  const [collapsedDomains, setCollapsedDomains] = useState<Set<string>>(() => new Set())
-  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => new Set())
+  const [expandedDomains, setExpandedDomains] = useState<Set<string>>(() => new Set())
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set())
+  const seenRunIdRef = useRef<string | null | undefined>(undefined)
+  const autoOpenedCatsRef = useRef<Set<string>>(new Set())
+  const autoOpenedDomainsRef = useRef<Set<string>>(new Set())
+
+  // Start all tree toggles closed on a new run, then auto-open only executed/running branches
+  useEffect(() => {
+    if (seenRunIdRef.current !== runId) {
+      seenRunIdRef.current = runId
+      autoOpenedCatsRef.current = new Set()
+      autoOpenedDomainsRef.current = new Set()
+      setExpandedDomains(new Set())
+      setExpandedCats(new Set())
+    }
+
+    const newDomains: string[] = []
+    const newCats: string[] = []
+
+    for (const dom of domains) {
+      const domActive = dom.running > 0 || dom.passed > 0 || dom.failed > 0 || dom.skipped > 0
+      if (domActive && !autoOpenedDomainsRef.current.has(dom.domain)) {
+        autoOpenedDomainsRef.current.add(dom.domain)
+        newDomains.push(dom.domain)
+      }
+      for (const cat of dom.categories) {
+        const catActive = cat.running > 0 || cat.passed > 0 || cat.failed > 0 || cat.skipped > 0
+        if (catActive && !autoOpenedCatsRef.current.has(cat.key)) {
+          autoOpenedCatsRef.current.add(cat.key)
+          newCats.push(cat.key)
+        }
+      }
+    }
+
+    if (newDomains.length > 0) {
+      setExpandedDomains((prev) => {
+        const next = new Set(prev)
+        newDomains.forEach((d) => next.add(d))
+        return next
+      })
+    }
+    if (newCats.length > 0) {
+      setExpandedCats((prev) => {
+        const next = new Set(prev)
+        newCats.forEach((c) => next.add(c))
+        return next
+      })
+    }
+  }, [runId, domains])
 
   const filteredDomains = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -50,7 +99,7 @@ export function TestTreePanel({
   }, [domains, query, statusFilter])
 
   const toggleDomain = (domain: string) => {
-    setCollapsedDomains((s) => {
+    setExpandedDomains((s) => {
       const next = new Set(s)
       if (next.has(domain)) next.delete(domain)
       else next.add(domain)
@@ -59,13 +108,15 @@ export function TestTreePanel({
   }
 
   const toggleCat = (key: string) => {
-    setCollapsedCats((s) => {
+    setExpandedCats((s) => {
       const next = new Set(s)
       if (next.has(key)) next.delete(key)
       else next.add(key)
       return next
     })
   }
+
+  const forceExpandForFilter = query.trim().length > 0 || statusFilter !== 'all'
 
   const filterButtons: Array<{ id: 'all' | 'running' | 'failed' | 'passed'; label: string }> = [
     { id: 'all', label: '전체' },
@@ -132,7 +183,7 @@ export function TestTreePanel({
           </div>
         ) : (
           filteredDomains.map((dom) => {
-            const domCollapsed = collapsedDomains.has(dom.domain)
+            const domExpanded = forceExpandForFilter || expandedDomains.has(dom.domain)
             return (
               <div key={dom.domain} className="mb-3">
                 {/* Level 1: 대분류 */}
@@ -143,10 +194,10 @@ export function TestTreePanel({
                   style={{ color: 'var(--text-primary)' }}
                 >
                   <span className="flex items-center gap-1.5 truncate">
-                    {domCollapsed ? (
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-                    ) : (
+                    {domExpanded ? (
                       <ChevronDown className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
                     )}
                     <StatusDot status={dom.status} />
                     <span className="truncate">{dom.title}</span>
@@ -156,10 +207,10 @@ export function TestTreePanel({
                   </span>
                 </button>
 
-                {!domCollapsed && (
+                {domExpanded && (
                   <div className="mt-0.5 space-y-1 pl-2">
                     {dom.categories.map((cat) => {
-                      const catCollapsed = collapsedCats.has(cat.key)
+                      const catExpanded = forceExpandForFilter || expandedCats.has(cat.key)
                       return (
                         <div key={cat.key}>
                           {/* Level 2: 중분류 */}
@@ -170,10 +221,10 @@ export function TestTreePanel({
                             style={{ color: 'var(--text-secondary)' }}
                           >
                             <span className="flex items-center gap-1.5 truncate">
-                              {catCollapsed ? (
-                                <ChevronRight className="h-3 w-3 shrink-0" />
-                              ) : (
+                              {catExpanded ? (
                                 <ChevronDown className="h-3 w-3 shrink-0" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3 shrink-0" />
                               )}
                               <StatusDot status={cat.status} />
                               <span className="truncate font-medium">{cat.title}</span>
@@ -186,7 +237,7 @@ export function TestTreePanel({
                             />
                           </button>
 
-                          {!catCollapsed && (
+                          {catExpanded && (
                             <div
                               className="ml-3 mt-0.5 space-y-0.5 border-l pl-2"
                               style={{ borderColor: 'var(--border-subtle)' }}

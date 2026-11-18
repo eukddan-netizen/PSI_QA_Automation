@@ -91,6 +91,7 @@ export function App() {
       ) : (
         <div className="flex flex-1 overflow-hidden">
           <TestTreePanel
+            runId={run?.run_id}
             domains={domains}
             activeNodeId={run?.active_nodeid}
             statusFilter={statusFilter}
