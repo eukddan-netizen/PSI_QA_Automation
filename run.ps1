@@ -1,12 +1,14 @@
-﻿param(
+param(
     [Parameter(Position = 0)]
     $Target,
     [Parameter(Position = 1)]
-    $SubTarget
+    $SubTarget,
+    [switch]$Dashboard
 )
 
 if ($Target -is [array]) { $Target = ($Target -join ",") } else { $Target = [string]$Target }
 if ($SubTarget -is [array]) { $SubTarget = ($SubTarget -join ",") } else { $SubTarget = [string]$SubTarget }
+if ($Dashboard) { $env:PSI_DASHBOARD_RUN_ID = "cli_" + (Get-Date -Format "yyyyMMdd_HHmmss") }
 
 $VenvPytest = Join-Path $PSScriptRoot ".venv\Scripts\pytest.exe"
 $IsElevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -37,7 +39,14 @@ if ([string]::IsNullOrWhiteSpace($Target)) {
     Write-Host ""
     Write-Host "  [기타]" -ForegroundColor Yellow
     Write-Host "    .\run list           전체 pytest 테스트 목록 수집 확인"
+    Write-Host "    .\run dashboard      로컬 QA 대시보드 웹 서버 실행 (http://127.0.0.1:8000)"
+    Write-Host "    .\run <대상> -Dashboard  대시보드로 실시간 로그 스트리밍하며 실행"
     exit 0
+}
+
+if ($Target -eq "dashboard") {
+    & (Join-Path $PSScriptRoot "run_dashboard.ps1")
+    exit $LASTEXITCODE
 }
 
 if ($Target -eq "tray" -or $Target -eq "트레이" -or $Target -eq "트레이아이콘") {

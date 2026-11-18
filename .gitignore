@@ -23,3 +23,7 @@ allure-report/
 Thumbs.db
 Desktop.ini
 
+# Dashboard frontend dependencies & build output
+frontend/node_modules/
+dashboard/static/
+
