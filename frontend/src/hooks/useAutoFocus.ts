@@ -56,9 +56,14 @@ export function useAutoFocus(run: RunState | null, categories: CategoryGroup[]):
           initCases.add(c.nodeid)
         }
       }
-      // If run hasn't started or all passed in history, expand first category for quick inspection
+      // If no active/failed item remains (e.g. completed run), expand only categories that actually ran
       if (initCats.size === 0 && categories.length > 0) {
-        initCats.add(categories[0].key)
+        const executedCats = categories.filter((c) => c.passed + c.failed + c.skipped > 0)
+        if (executedCats.length > 0) {
+          executedCats.forEach((c) => initCats.add(c.key))
+        } else {
+          initCats.add(categories[0].key)
+        }
       }
       for (const cat of categories) {
         prevCatStatusesRef.current.set(cat.key, cat.status)

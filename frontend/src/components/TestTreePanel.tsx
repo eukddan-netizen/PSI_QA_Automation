@@ -129,12 +129,18 @@ export function TestTreePanel({
     <aside
       className="flex h-full w-[310px] shrink-0 flex-col border-r select-none"
       style={{
-        backgroundColor: 'var(--bg-surface)',
+        backgroundColor: 'var(--bg-sidebar)',
         borderColor: 'var(--border-subtle)',
       }}
     >
       {/* Search + Quick Filters */}
-      <div className="space-y-2 border-b p-3" style={{ borderColor: 'var(--border-subtle)' }}>
+      <div
+        className="space-y-2 border-b p-3"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderColor: 'var(--border-subtle)',
+        }}
+      >
         <div
           className="flex h-8 items-center gap-1.5 rounded border px-2"
           style={{

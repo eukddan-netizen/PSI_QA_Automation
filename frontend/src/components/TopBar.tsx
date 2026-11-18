@@ -72,29 +72,33 @@ export function TopBar({
     <header
       className="flex h-13 shrink-0 items-center justify-between border-b px-4"
       style={{
-        backgroundColor: 'var(--bg-surface)',
-        borderColor: 'var(--border-subtle)',
+        backgroundColor: 'var(--bg-header)',
+        borderColor: 'var(--border-header)',
+        color: 'var(--text-header)',
       }}
     >
       {/* Left: Brand & Live Connection & Run History */}
       <div className="flex items-center gap-3 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <div
             className="flex h-7 w-7 items-center justify-center rounded border"
             style={{
-              backgroundColor: 'var(--bg-subtle)',
-              borderColor: 'var(--border-strong)',
+              backgroundColor: 'var(--bg-header-control)',
+              borderColor: 'var(--border-header)',
+              color: 'var(--text-header)',
             }}
           >
-            <Terminal className="h-3.5 w-3.5" style={{ color: 'var(--text-primary)' }} />
+            <Terminal className="h-3.5 w-3.5" />
           </div>
           <div className="leading-tight">
-            <div className="text-[13px] font-semibold tracking-tight">PSI QA Monitor</div>
-            <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <div className="text-[13px] font-semibold tracking-tight" style={{ color: 'var(--text-header)' }}>
+              PSI QA Monitor
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-header-muted)' }}>
               <span
                 className="inline-block h-1.5 w-1.5 rounded-full"
                 style={{
-                  backgroundColor: connected ? 'var(--status-pass)' : 'var(--status-fail)',
+                  backgroundColor: connected ? '#34d399' : '#f87171',
                 }}
               />
               <span>{connected ? 'SSE 실시간 연결' : '연결 대기중'}</span>
@@ -107,7 +111,7 @@ export function TopBar({
           </div>
         </div>
 
-        <div className="h-5 w-px mx-1" style={{ backgroundColor: 'var(--border-subtle)' }} />
+        <div className="h-5 w-px mx-1" style={{ backgroundColor: 'var(--border-header)' }} />
 
         {/* Run Selector & Reset */}
         {runs.length > 0 && (
@@ -118,13 +122,17 @@ export function TopBar({
               aria-label="실행 이력 선택"
               className="h-8 max-w-[230px] rounded border px-2 text-[12px] outline-none"
               style={{
-                backgroundColor: 'var(--bg-subtle)',
-                borderColor: 'var(--border-subtle)',
-                color: 'var(--text-primary)',
+                backgroundColor: 'var(--bg-header-control)',
+                borderColor: 'var(--border-header)',
+                color: 'var(--text-header)',
               }}
             >
               {runs.map((item) => (
-                <option key={item.run_id} value={item.run_id}>
+                <option
+                  key={item.run_id}
+                  value={item.run_id}
+                  style={{ backgroundColor: 'var(--bg-header)', color: 'var(--text-header)' }}
+                >
                   [{item.status === 'running' ? '진행중' : item.summary.failed > 0 ? '오류' : '완료'}] {item.started_at.slice(5, 16)} · {item.title}
                 </option>
               ))}
@@ -135,11 +143,11 @@ export function TopBar({
               disabled={runner.is_running}
               onClick={onClearRuns}
               title="저장된 이전 테스트 실행 결과 및 로그 초기화"
-              className="inline-flex h-8 items-center gap-1 rounded border px-2 text-[11.5px] font-medium transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+              className="inline-flex h-8 items-center gap-1 rounded border px-2.5 text-[11.5px] font-medium transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
               style={{
-                backgroundColor: 'var(--bg-surface)',
-                borderColor: 'var(--border-subtle)',
-                color: 'var(--text-secondary)',
+                backgroundColor: 'var(--bg-header-control)',
+                borderColor: 'var(--border-header)',
+                color: 'var(--text-header)',
               }}
             >
               <RotateCcw className="h-3 w-3" />
@@ -160,16 +168,16 @@ export function TopBar({
             aria-label="테스트 실행 대상 선택"
             className="h-8 max-w-[220px] rounded border px-2.5 text-[12px] outline-none disabled:opacity-50"
             style={{
-              backgroundColor: 'var(--bg-subtle)',
-              borderColor: 'var(--border-subtle)',
-              color: 'var(--text-primary)',
+              backgroundColor: 'var(--bg-header-control)',
+              borderColor: 'var(--border-header)',
+              color: 'var(--text-header)',
             }}
           >
             {presets.map((p) => (
               <option
                 key={p.id}
                 value={p.id}
-                style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                style={{ backgroundColor: 'var(--bg-header)', color: 'var(--text-header)' }}
               >
                 {p.label}
               </option>
@@ -182,9 +190,9 @@ export function TopBar({
               onClick={onStopRun}
               className="inline-flex h-8 items-center gap-1.5 rounded border px-3 text-[12px] font-medium transition-colors cursor-pointer"
               style={{
-                backgroundColor: 'var(--status-fail-bg)',
-                borderColor: 'var(--status-fail-border)',
-                color: 'var(--status-fail)',
+                backgroundColor: 'rgba(239, 68, 68, 0.18)',
+                borderColor: 'rgba(248, 113, 113, 0.45)',
+                color: '#fca5a5',
               }}
             >
               <Square className="h-3 w-3 fill-current" />
@@ -204,9 +212,9 @@ export function TopBar({
           )}
         </div>
 
-        <div className="h-5 w-px mx-0.5" style={{ backgroundColor: 'var(--border-subtle)' }} />
+        <div className="h-5 w-px mx-0.5" style={{ backgroundColor: 'var(--border-header)' }} />
 
-        {/* Export Snapshot Buttons (Top-Right Requirement) */}
+        {/* Export Snapshot Buttons */}
         <div
           className="flex items-center gap-1.5"
           title={
@@ -219,14 +227,14 @@ export function TopBar({
             type="button"
             disabled={!canExport}
             onClick={() => handleDownload('xlsx')}
-            className="inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-[12px] font-medium transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            className="inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-[12px] font-medium transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
             style={{
-              backgroundColor: 'var(--bg-surface)',
-              borderColor: 'var(--border-strong)',
-              color: 'var(--text-primary)',
+              backgroundColor: 'var(--bg-header-control)',
+              borderColor: 'var(--border-header)',
+              color: 'var(--text-header)',
             }}
           >
-            <FileSpreadsheet className="h-3.5 w-3.5" style={{ color: 'var(--status-pass)' }} />
+            <FileSpreadsheet className="h-3.5 w-3.5" style={{ color: '#34d399' }} />
             <span>Excel</span>
           </button>
 
@@ -234,14 +242,14 @@ export function TopBar({
             type="button"
             disabled={!canExport}
             onClick={() => handleDownload('docx')}
-            className="inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-[12px] font-medium transition-colors hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            className="inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-[12px] font-medium transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
             style={{
-              backgroundColor: 'var(--bg-surface)',
-              borderColor: 'var(--border-strong)',
-              color: 'var(--text-primary)',
+              backgroundColor: 'var(--bg-header-control)',
+              borderColor: 'var(--border-header)',
+              color: 'var(--text-header)',
             }}
           >
-            <FileText className="h-3.5 w-3.5" style={{ color: 'var(--accent-primary)' }} />
+            <FileText className="h-3.5 w-3.5" style={{ color: '#60a5fa' }} />
             <span>Word</span>
           </button>
         </div>
@@ -251,11 +259,11 @@ export function TopBar({
           type="button"
           onClick={onToggleTheme}
           title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
-          className="flex h-8 w-8 items-center justify-center rounded border transition-colors cursor-pointer"
+          className="flex h-8 w-8 items-center justify-center rounded border transition-opacity hover:opacity-85 cursor-pointer"
           style={{
-            backgroundColor: 'var(--bg-surface)',
-            borderColor: 'var(--border-subtle)',
-            color: 'var(--text-secondary)',
+            backgroundColor: 'var(--bg-header-control)',
+            borderColor: 'var(--border-header)',
+            color: 'var(--text-header)',
           }}
         >
           {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}

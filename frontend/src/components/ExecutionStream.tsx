@@ -73,7 +73,7 @@ export function ExecutionStream({
       <div
         className="flex h-10 shrink-0 items-center justify-between border-b px-4 text-[12px]"
         style={{
-          backgroundColor: 'var(--bg-canvas)',
+          backgroundColor: 'var(--bg-sticky-bar)',
           borderColor: 'var(--border-subtle)',
         }}
       >
@@ -239,6 +239,7 @@ function CategoryAccordion({
       style={{
         backgroundColor: 'var(--bg-surface)',
         borderColor: cat.status === 'running' ? 'var(--status-run-border)' : 'var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       {/* 중분류 헤더 */}
@@ -247,7 +248,7 @@ function CategoryAccordion({
         onClick={onToggleCategory}
         className="flex w-full items-center justify-between px-3.5 py-2.5 text-left transition-colors cursor-pointer"
         style={{
-          backgroundColor: cat.status === 'running' ? 'var(--status-run-bg)' : 'transparent',
+          backgroundColor: cat.status === 'running' ? 'var(--status-run-bg)' : 'var(--bg-category-header)',
         }}
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -275,7 +276,7 @@ function CategoryAccordion({
 
       {/* 소분류(개별 테스트 케이스) 목록 */}
       {expanded && (
-        <div className="divide-y border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="divide-y border-t" style={{ borderColor: 'var(--border-row)' }}>
           {visibleCases.map((tc) => (
             <CaseAccordion
               key={tc.nodeid}
@@ -320,7 +321,7 @@ function CaseAccordion({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between px-3.5 py-2 text-left transition-colors cursor-pointer"
+        className="flex w-full items-center justify-between px-3.5 py-2 text-left transition-colors hover:bg-[var(--bg-hover)] cursor-pointer"
         style={{
           backgroundColor: isRunning ? 'var(--bg-subtle)' : 'transparent',
         }}

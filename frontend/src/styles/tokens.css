@@ -1,63 +1,89 @@
 @import "tailwindcss";
 
 :root {
-  --bg-canvas: #fafafa;
+  --bg-header: #182232;
+  --bg-header-control: #243247;
+  --border-header: #2d3d54;
+  --text-header: #f8fafc;
+  --text-header-muted: #94a3b8;
+
+  --bg-canvas: #edf1f6;
   --bg-surface: #ffffff;
-  --bg-subtle: #f4f4f5;
-  --bg-hover: #f0f1f4;
+  --bg-sidebar: #f8fafc;
+  --bg-sticky-bar: #e3e9f2;
+  --bg-category-header: #f1f5f9;
+  --bg-subtle: #f1f5f9;
+  --bg-hover: #f1f5f9;
   --bg-terminal: #f8fafc;
-  --border-subtle: #e4e4e7;
-  --border-strong: #d4d4d8;
-  --text-primary: #09090b;
-  --text-secondary: #52525b;
-  --text-muted: #71717a;
+
+  --border-subtle: #cbd5e1;
+  --border-row: #e2e8f0;
+  --border-strong: #94a3b8;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
 
   --accent-primary: #2563eb;
-  --accent-bg: #eff6ff;
+  --accent-bg: #dbeafe;
 
   --status-pass: #059669;
   --status-pass-bg: #ecfdf5;
-  --status-pass-border: #a7f3d0;
+  --status-pass-border: #6ee7b7;
 
   --status-fail: #dc2626;
   --status-fail-bg: #fef2f2;
-  --status-fail-border: #fecaca;
+  --status-fail-border: #fca5a5;
 
   --status-run: #2563eb;
   --status-run-bg: #eff6ff;
-  --status-run-border: #bfdbfe;
+  --status-run-border: #93c5fd;
 
-  --status-skip: #64748b;
+  --status-skip: #475569;
   --status-skip-bg: #f1f5f9;
   --status-skip-border: #cbd5e1;
 
   --status-warn: #d97706;
   --status-warn-bg: #fffbeb;
-  --status-warn-border: #fde68a;
+  --status-warn-border: #fcd34d;
 }
 
 .dark {
-  --bg-canvas: #0b0d10;
-  --bg-surface: #12151b;
-  --bg-subtle: #181c24;
-  --bg-hover: #1e232e;
-  --bg-terminal: #090b0e;
-  --border-subtle: #222732;
-  --border-strong: #323947;
+  --bg-header: #080a0f;
+  --bg-header-control: #131822;
+  --border-header: #222938;
+  --text-header: #f4f4f5;
+  --text-header-muted: #8b95a5;
+
+  --bg-canvas: #0b0d11;
+  --bg-surface: #12161d;
+  --bg-sidebar: #0f1319;
+  --bg-sticky-bar: #10141b;
+  --bg-category-header: #171c26;
+  --bg-subtle: #181d27;
+  --bg-hover: #1d2330;
+  --bg-terminal: #090b0f;
+
+  --border-subtle: #242b38;
+  --border-row: #1e2430;
+  --border-strong: #353f52;
+  --shadow-card: none;
+
   --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text-secondary: #b4bcc8;
+  --text-muted: #7c8596;
 
   --accent-primary: #3b82f6;
-  --accent-bg: rgba(59, 130, 246, 0.12);
+  --accent-bg: rgba(59, 130, 246, 0.14);
 
   --status-pass: #34d399;
   --status-pass-bg: rgba(16, 185, 129, 0.12);
-  --status-pass-border: rgba(16, 185, 129, 0.3);
+  --status-pass-border: rgba(16, 185, 129, 0.35);
 
   --status-fail: #f87171;
   --status-fail-bg: rgba(239, 68, 68, 0.12);
-  --status-fail-border: rgba(239, 68, 68, 0.3);
+  --status-fail-border: rgba(239, 68, 68, 0.35);
 
   --status-run: #60a5fa;
   --status-run-bg: rgba(59, 130, 246, 0.14);
