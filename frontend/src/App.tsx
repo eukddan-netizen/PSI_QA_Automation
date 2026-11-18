@@ -30,10 +30,13 @@ export function App() {
     connected,
     loading,
     error,
+    runBatchSeq,
     selectRun,
     startPresetRun,
+    resumeRun,
     stopActiveRun,
-    clearAllRuns,
+    resetView,
+    deleteRuns,
   } = useRunStream()
 
   const domains = useMemo(() => buildHierarchyTree(run?.cases ?? []), [run?.cases])
@@ -50,7 +53,7 @@ export function App() {
     expandAll,
     collapsePassed,
     registerCaseRef,
-  } = useAutoFocus(run, flatCategories)
+  } = useAutoFocus(run, flatCategories, runBatchSeq)
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
@@ -64,8 +67,10 @@ export function App() {
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         onSelectRun={selectRun}
         onStartRun={startPresetRun}
+        onResumeRun={resumeRun}
         onStopRun={stopActiveRun}
-        onClearRuns={clearAllRuns}
+        onResetView={resetView}
+        onDeleteRuns={deleteRuns}
       />
 
       <SummaryStrip run={run} />
@@ -92,6 +97,8 @@ export function App() {
         <div className="flex flex-1 overflow-hidden">
           <TestTreePanel
             runId={run?.run_id}
+            runStatus={run?.status}
+            runBatchSeq={runBatchSeq}
             domains={domains}
             activeNodeId={run?.active_nodeid}
             statusFilter={statusFilter}

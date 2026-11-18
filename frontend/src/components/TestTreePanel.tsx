@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Search } from 'lucide-react'
-import type { DomainGroup, TestStatus } from '../types/run'
+import { formatDuration, type DomainGroup, type RunStatus, type TestStatus } from '../types/run'
 import { StatusDot } from './StatusBadge'
 
 interface TestTreePanelProps {
   runId?: string | null
+  runStatus?: RunStatus | null
+  runBatchSeq?: number
   domains: DomainGroup[]
   activeNodeId?: string | null
   statusFilter: 'all' | 'failed' | 'running' | 'passed'
@@ -14,6 +16,8 @@ interface TestTreePanelProps {
 
 export function TestTreePanel({
   runId,
+  runStatus,
+  runBatchSeq = 0,
   domains,
   activeNodeId,
   statusFilter,
@@ -24,30 +28,91 @@ export function TestTreePanel({
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(() => new Set())
   const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set())
   const seenRunIdRef = useRef<string | null | undefined>(undefined)
+  const lastBatchSeqRef = useRef<number>(runBatchSeq)
+  const prevRunStatusRef = useRef<RunStatus | null | undefined>(runStatus)
+  const activeBatchOnlyRef = useRef(false)
+  const baselineDomDoneRef = useRef<Map<string, number>>(new Map())
+  const baselineCatDoneRef = useRef<Map<string, number>>(new Map())
   const autoOpenedCatsRef = useRef<Set<string>>(new Set())
   const autoOpenedDomainsRef = useRef<Set<string>>(new Set())
 
-  // Start all tree toggles closed on a new run, then auto-open only executed/running branches
+  // Start all tree toggles closed on a new run or new batch, then auto-open only newly active branches
   useEffect(() => {
-    if (seenRunIdRef.current !== runId) {
+    const isNewRunId = seenRunIdRef.current !== runId
+    const isNewBatchOnSameRun =
+      !isNewRunId &&
+      Boolean(runId) &&
+      (lastBatchSeqRef.current !== runBatchSeq ||
+        (prevRunStatusRef.current !== 'running' && runStatus === 'running'))
+
+    if (isNewRunId) {
       seenRunIdRef.current = runId
+      lastBatchSeqRef.current = runBatchSeq
+      prevRunStatusRef.current = runStatus
+      activeBatchOnlyRef.current = false
+      baselineDomDoneRef.current = new Map()
+      baselineCatDoneRef.current = new Map()
       autoOpenedCatsRef.current = new Set()
       autoOpenedDomainsRef.current = new Set()
       setExpandedDomains(new Set())
       setExpandedCats(new Set())
+    } else if (isNewBatchOnSameRun) {
+      lastBatchSeqRef.current = runBatchSeq
+      prevRunStatusRef.current = runStatus
+      activeBatchOnlyRef.current = true
+      baselineDomDoneRef.current = new Map(
+        domains.map((dom) => [dom.domain, dom.passed + dom.failed + dom.skipped]),
+      )
+      baselineCatDoneRef.current = new Map(
+        domains.flatMap((dom) =>
+          dom.categories.map((cat) => [cat.key, cat.passed + cat.failed + cat.skipped] as const),
+        ),
+      )
+      autoOpenedCatsRef.current = new Set()
+      autoOpenedDomainsRef.current = new Set()
+      setExpandedDomains(new Set())
+      setExpandedCats(new Set())
+    } else {
+      lastBatchSeqRef.current = runBatchSeq
+      prevRunStatusRef.current = runStatus
     }
 
     const newDomains: string[] = []
     const newCats: string[] = []
 
     for (const dom of domains) {
-      const domActive = dom.running > 0 || dom.passed > 0 || dom.failed > 0 || dom.skipped > 0
+      const domDone = dom.passed + dom.failed + dom.skipped
+      let domActive: boolean
+      if (activeBatchOnlyRef.current) {
+        let domBase = baselineDomDoneRef.current.get(dom.domain) ?? 0
+        if (domDone < domBase) {
+          baselineDomDoneRef.current.set(dom.domain, domDone)
+          domBase = domDone
+        }
+        domActive = dom.running > 0 || domDone > domBase
+      } else {
+        domActive = dom.running > 0 || domDone > 0
+      }
+
       if (domActive && !autoOpenedDomainsRef.current.has(dom.domain)) {
         autoOpenedDomainsRef.current.add(dom.domain)
         newDomains.push(dom.domain)
       }
+
       for (const cat of dom.categories) {
-        const catActive = cat.running > 0 || cat.passed > 0 || cat.failed > 0 || cat.skipped > 0
+        const catDone = cat.passed + cat.failed + cat.skipped
+        let catActive: boolean
+        if (activeBatchOnlyRef.current) {
+          let catBase = baselineCatDoneRef.current.get(cat.key) ?? 0
+          if (catDone < catBase) {
+            baselineCatDoneRef.current.set(cat.key, catDone)
+            catBase = catDone
+          }
+          catActive = cat.running > 0 || catDone > catBase
+        } else {
+          catActive = cat.running > 0 || catDone > 0
+        }
+
         if (catActive && !autoOpenedCatsRef.current.has(cat.key)) {
           autoOpenedCatsRef.current.add(cat.key)
           newCats.push(cat.key)
@@ -69,7 +134,7 @@ export function TestTreePanel({
         return next
       })
     }
-  }, [runId, domains])
+  }, [runId, runStatus, runBatchSeq, domains])
 
   const filteredDomains = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -276,7 +341,7 @@ export function TestTreePanel({
                                         className="font-mono-code ml-1 shrink-0 text-[10px]"
                                         style={{ color: 'var(--text-muted)' }}
                                       >
-                                        {tc.duration.toFixed(1)}s
+                                        {tc.duration >= 60 ? formatDuration(tc.duration) : `${tc.duration.toFixed(1)}초`}
                                       </span>
                                     )}
                                   </button>

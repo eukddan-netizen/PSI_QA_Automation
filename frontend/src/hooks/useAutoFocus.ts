@@ -21,7 +21,11 @@ interface AutoFocusState {
  * - Keeps failed/error cases pinned open so issues are never hidden.
  * - Auto-collapses a category once all its cases finish without failures.
  */
-export function useAutoFocus(run: RunState | null, categories: CategoryGroup[]): AutoFocusState {
+export function useAutoFocus(
+  run: RunState | null,
+  categories: CategoryGroup[],
+  runBatchSeq = 0,
+): AutoFocusState {
   const [autoFollow, setAutoFollow] = useState(true)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => new Set())
   const [expandedCases, setExpandedCases] = useState<Set<string>>(() => new Set())
@@ -30,6 +34,8 @@ export function useAutoFocus(run: RunState | null, categories: CategoryGroup[]):
   const prevCatStatusesRef = useRef<Map<string, TestStatus>>(new Map())
   const caseRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const lastRunIdRef = useRef<string | null>(null)
+  const lastBatchSeqRef = useRef<number>(runBatchSeq)
+  const prevRunStatusRef = useRef<RunState['status'] | null>(null)
   const collapseTimersRef = useRef<number[]>([])
 
   const registerCaseRef = useCallback((nodeid: string, el: HTMLDivElement | null) => {
@@ -37,11 +43,31 @@ export function useAutoFocus(run: RunState | null, categories: CategoryGroup[]):
     else caseRefs.current.delete(nodeid)
   }, [])
 
-  // Reset state cleanly when switching runs
+  // Reset state cleanly when clearing view, switching runs, or starting a new batch on the same run
   useEffect(() => {
-    if (!run) return
-    if (lastRunIdRef.current !== run.run_id) {
+    if (!run) {
+      lastRunIdRef.current = null
+      prevRunStatusRef.current = null
+      lastBatchSeqRef.current = runBatchSeq
+      prevStatusesRef.current.clear()
+      prevCatStatusesRef.current.clear()
+      collapseTimersRef.current.forEach((t) => window.clearTimeout(t))
+      collapseTimersRef.current = []
+      setExpandedCategories(new Set())
+      setExpandedCases(new Set())
+      return
+    }
+
+    const isNewRunId = lastRunIdRef.current !== run.run_id
+    const isNewBatchOnSameRun =
+      !isNewRunId &&
+      (lastBatchSeqRef.current !== runBatchSeq ||
+        (prevRunStatusRef.current !== 'running' && run.status === 'running'))
+
+    if (isNewRunId) {
       lastRunIdRef.current = run.run_id
+      lastBatchSeqRef.current = runBatchSeq
+      prevRunStatusRef.current = run.status
       prevStatusesRef.current.clear()
       prevCatStatusesRef.current.clear()
       collapseTimersRef.current.forEach((t) => window.clearTimeout(t))
@@ -70,8 +96,27 @@ export function useAutoFocus(run: RunState | null, categories: CategoryGroup[]):
       }
       setExpandedCategories(initCats)
       setExpandedCases(initCases)
+    } else if (isNewBatchOnSameRun) {
+      lastBatchSeqRef.current = runBatchSeq
+      prevRunStatusRef.current = run.status
+      collapseTimersRef.current.forEach((t) => window.clearTimeout(t))
+      collapseTimersRef.current = []
+      prevStatusesRef.current.clear()
+      prevCatStatusesRef.current.clear()
+      for (const c of run.cases) {
+        prevStatusesRef.current.set(c.nodeid, c.status)
+      }
+      for (const cat of categories) {
+        prevCatStatusesRef.current.set(cat.key, cat.status)
+      }
+      setAutoFollow(true)
+      setExpandedCategories(new Set())
+      setExpandedCases(new Set())
+    } else {
+      prevRunStatusRef.current = run.status
+      lastBatchSeqRef.current = runBatchSeq
     }
-  }, [run, categories])
+  }, [run, categories, runBatchSeq])
 
   // Track status transitions for Auto-Collapse & Auto-Focus
   useEffect(() => {

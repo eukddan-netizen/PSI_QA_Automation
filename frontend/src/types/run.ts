@@ -88,6 +88,16 @@ export interface CatalogPreset {
   description: string
 }
 
+export interface StartRunPayload {
+  target: string
+  markers?: string | null
+  paths?: string[]
+  keyword?: string | null
+  title: string
+  run_id?: string | null
+  accumulate?: boolean
+}
+
 export interface RunnerStatus {
   is_running: boolean
   active_run_id?: string | null
@@ -119,6 +129,7 @@ export interface DomainGroup {
   failed: number
   skipped: number
   running: number
+  pending: number
   categories: CategoryGroup[]
 }
 
@@ -188,9 +199,25 @@ export function buildHierarchyTree(cases: TestCaseState[]): DomainGroup[] {
       failed: categories.reduce((acc, cat) => acc + cat.failed, 0),
       skipped: categories.reduce((acc, cat) => acc + cat.skipped, 0),
       running: categories.reduce((acc, cat) => acc + cat.running, 0),
+      pending: categories.reduce((acc, cat) => acc + cat.pending, 0),
       categories,
     })
   }
 
   return result
+}
+
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0.00초'
+  if (seconds < 60) {
+    return `${seconds.toFixed(2)}초`
+  }
+  const totalSeconds = Math.round(seconds)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const secs = totalSeconds % 60
+  if (hours > 0) {
+    return `${hours}시간 ${String(minutes).padStart(2, '0')}분 ${String(secs).padStart(2, '0')}초`
+  }
+  return `${minutes}분 ${String(secs).padStart(2, '0')}초`
 }

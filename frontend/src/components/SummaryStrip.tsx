@@ -1,4 +1,4 @@
-import type { RunState } from '../types/run'
+import { formatDuration, type RunState } from '../types/run'
 
 export function SummaryStrip({ run }: { run: RunState | null }) {
   if (!run) {
@@ -18,6 +18,7 @@ export function SummaryStrip({ run }: { run: RunState | null }) {
 
   const { summary } = run
   const pct = summary.total > 0 ? Math.round((summary.completed / summary.total) * 100) : 0
+  const remaining = Math.max(0, summary.total - summary.completed)
 
   return (
     <div
@@ -31,6 +32,11 @@ export function SummaryStrip({ run }: { run: RunState | null }) {
         <div className="flex items-center gap-5">
           <Metric label="전체" value={`${summary.total}`} />
           <Metric label="완료" value={`${summary.completed} (${pct}%)`} />
+          <Metric
+            label="잔여"
+            value={`${remaining}`}
+            color={remaining > 0 ? 'var(--text-primary)' : 'var(--text-muted)'}
+          />
           <Metric label="정상" value={`${summary.passed}`} color="var(--status-pass)" />
           <Metric
             label="오류"
@@ -39,7 +45,7 @@ export function SummaryStrip({ run }: { run: RunState | null }) {
           />
           <Metric label="제외" value={`${summary.skipped}`} color="var(--status-skip)" />
           <Metric label="정상률" value={`${summary.pass_rate.toFixed(1)}%`} />
-          <Metric label="누적시간" value={`${summary.duration_sec.toFixed(2)}s`} />
+          <Metric label="누적시간" value={formatDuration(summary.duration_sec)} />
         </div>
 
         <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>

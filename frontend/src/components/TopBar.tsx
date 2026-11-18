@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FileSpreadsheet,
   FileText,
@@ -7,10 +7,13 @@ import {
   RotateCcw,
   Shield,
   Square,
+  StepForward,
   Sun,
   Terminal,
 } from 'lucide-react'
-import type { CatalogPreset, RunListItem, RunState, RunnerStatus } from '../types/run'
+import type { CatalogPreset, RunListItem, RunState, RunnerStatus, StartRunPayload } from '../types/run'
+import { RunHistorySelector } from './RunHistorySelector'
+import { TargetSelector, buildRunPayload } from './TargetSelector'
 
 interface TopBarProps {
   run: RunState | null
@@ -21,9 +24,11 @@ interface TopBarProps {
   theme: 'dark' | 'light'
   onToggleTheme: () => void
   onSelectRun: (runId: string) => void
-  onStartRun: (preset: CatalogPreset) => Promise<void>
+  onStartRun: (payload: StartRunPayload) => Promise<void>
+  onResumeRun: (runId: string) => Promise<void>
   onStopRun: () => Promise<void>
-  onClearRuns: () => Promise<void>
+  onResetView: () => void
+  onDeleteRuns: (runIds: string[]) => Promise<void>
 }
 
 export function TopBar({
@@ -36,24 +41,59 @@ export function TopBar({
   onToggleTheme,
   onSelectRun,
   onStartRun,
+  onResumeRun,
   onStopRun,
-  onClearRuns,
+  onResetView,
+  onDeleteRuns,
 }: TopBarProps) {
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('app_all')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [useAllTarget, setUseAllTarget] = useState(false)
   const [launching, setLaunching] = useState(false)
+  const [resuming, setResuming] = useState(false)
+  const initializedRef = useRef(false)
 
-  const activePreset = presets.find((p) => p.id === selectedPresetId) ?? presets[0]
+  useEffect(() => {
+    if (!initializedRef.current && presets.length > 0) {
+      initializedRef.current = true
+      const appChildIds = presets
+        .filter((p) => p.domain === 'app_checks' && p.id !== 'app_all')
+        .map((p) => p.id)
+      setSelectedIds(new Set(appChildIds))
+    }
+  }, [presets])
+
+  const runPayload = useMemo(
+    () => buildRunPayload(presets, selectedIds, useAllTarget),
+    [presets, selectedIds, useAllTarget],
+  )
   const canExport = Boolean(run && run.cases.length > 0)
   const completedCount = run?.summary.completed ?? 0
   const totalCount = run?.summary.total ?? 0
+  const pendingCount = run?.summary.pending ?? 0
+  const canResume = Boolean(
+    !runner.is_running &&
+      run &&
+      pendingCount > 0 &&
+      (run.status === 'stopped' || run.status === 'failed'),
+  )
 
   const handleLaunch = async () => {
-    if (!activePreset || launching) return
+    if (!runPayload || launching || resuming) return
     setLaunching(true)
     try {
-      await onStartRun(activePreset)
+      await onStartRun(runPayload)
     } finally {
       setLaunching(false)
+    }
+  }
+
+  const handleResume = async () => {
+    if (!run || !canResume || resuming || launching) return
+    setResuming(true)
+    try {
+      await onResumeRun(run.run_id)
+    } finally {
+      setResuming(false)
     }
   }
 
@@ -114,36 +154,24 @@ export function TopBar({
         <div className="h-5 w-px mx-1" style={{ backgroundColor: 'var(--border-header)' }} />
 
         {/* Run Selector & Reset */}
-        {runs.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <select
-              value={run?.run_id ?? ''}
-              onChange={(e) => e.target.value && onSelectRun(e.target.value)}
-              aria-label="실행 이력 선택"
-              className="h-8 max-w-[230px] rounded border px-2 text-[12px] outline-none"
-              style={{
-                backgroundColor: 'var(--bg-header-control)',
-                borderColor: 'var(--border-header)',
-                color: 'var(--text-header)',
-              }}
-            >
-              {runs.map((item) => (
-                <option
-                  key={item.run_id}
-                  value={item.run_id}
-                  style={{ backgroundColor: 'var(--bg-header)', color: 'var(--text-header)' }}
-                >
-                  [{item.status === 'running' ? '진행중' : item.summary.failed > 0 ? '오류' : '완료'}] {item.started_at.slice(5, 16)} · {item.title}
-                </option>
-              ))}
-            </select>
+        {(runs.length > 0 || run !== null) && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            {runs.length > 0 && (
+              <RunHistorySelector
+                currentRun={run}
+                runs={runs}
+                isRunning={runner.is_running}
+                onSelectRun={onSelectRun}
+                onDeleteRuns={onDeleteRuns}
+              />
+            )}
 
             <button
               type="button"
-              disabled={runner.is_running}
-              onClick={onClearRuns}
-              title="저장된 이전 테스트 실행 결과 및 로그 초기화"
-              className="inline-flex h-8 items-center gap-1 rounded border px-2.5 text-[11.5px] font-medium transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+              disabled={runner.is_running || !run}
+              onClick={onResetView}
+              title="현재 화면을 테스트 전 초기 상태로 되돌립니다 (저장된 DB 이력은 유지됩니다)"
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded border px-2.5 text-[11.5px] font-medium transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
               style={{
                 backgroundColor: 'var(--bg-header-control)',
                 borderColor: 'var(--border-header)',
@@ -159,36 +187,24 @@ export function TopBar({
 
       {/* Right: Runner Controls + Theme + Government Report Export Buttons */}
       <div className="flex items-center gap-2">
-        {/* Preset Launcher */}
+        {/* Hierarchical Checkbox Target Launcher */}
         <div className="flex items-center gap-2">
-          <select
-            value={activePreset?.id ?? ''}
-            onChange={(e) => setSelectedPresetId(e.target.value)}
+          <TargetSelector
+            presets={presets}
             disabled={runner.is_running}
-            aria-label="테스트 실행 대상 선택"
-            className="h-8 max-w-[220px] rounded border px-2.5 text-[12px] outline-none disabled:opacity-50"
-            style={{
-              backgroundColor: 'var(--bg-header-control)',
-              borderColor: 'var(--border-header)',
-              color: 'var(--text-header)',
+            selectedIds={selectedIds}
+            useAllTarget={useAllTarget}
+            onChangeSelection={(nextIds, nextUseAll) => {
+              setSelectedIds(nextIds)
+              setUseAllTarget(nextUseAll)
             }}
-          >
-            {presets.map((p) => (
-              <option
-                key={p.id}
-                value={p.id}
-                style={{ backgroundColor: 'var(--bg-header)', color: 'var(--text-header)' }}
-              >
-                {p.label}
-              </option>
-            ))}
-          </select>
+          />
 
           {runner.is_running ? (
             <button
               type="button"
               onClick={onStopRun}
-              className="inline-flex h-8 items-center gap-1.5 rounded border px-3 text-[12px] font-medium transition-colors cursor-pointer"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded border px-3 text-[12px] font-medium transition-colors cursor-pointer"
               style={{
                 backgroundColor: 'rgba(239, 68, 68, 0.18)',
                 borderColor: 'rgba(248, 113, 113, 0.45)',
@@ -199,16 +215,35 @@ export function TopBar({
               <span>중단</span>
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleLaunch}
-              disabled={!activePreset || launching}
-              className="inline-flex h-8 items-center gap-1.5 rounded px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40 cursor-pointer"
-              style={{ backgroundColor: 'var(--accent-primary)' }}
-            >
-              <Play className="h-3 w-3 fill-current" />
-              <span>{launching ? '시작중...' : '테스트 실행'}</span>
-            </button>
+            <>
+              {canResume && (
+                <button
+                  type="button"
+                  onClick={handleResume}
+                  disabled={resuming || launching}
+                  title={`중단/미완료된 대기 항목 ${pendingCount}건을 이어서 실행합니다`}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded border px-2.5 text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  style={{
+                    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+                    borderColor: 'rgba(251, 191, 36, 0.45)',
+                    color: '#fcd34d',
+                  }}
+                >
+                  <StepForward className="h-3.5 w-3.5" />
+                  <span>{resuming ? '재개중...' : `이어서 진행 (${pendingCount}건)`}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleLaunch}
+                disabled={!runPayload || launching || resuming}
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                style={{ backgroundColor: 'var(--accent-primary)' }}
+              >
+                <Play className="h-3 w-3 fill-current" />
+                <span>{launching ? '시작중...' : '테스트 실행'}</span>
+              </button>
+            </>
           )}
         </div>
 

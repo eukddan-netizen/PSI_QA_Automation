@@ -170,38 +170,48 @@ export function ExecutionStream({
           </div>
         )}
 
-        {domains.map((dom) => (
-          <section key={dom.domain} className="space-y-2.5">
-            {/* 대분류 헤더 */}
-            <div className="flex items-center justify-between px-0.5">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />
-                <h2 className="text-[13px] font-semibold tracking-tight">{dom.title}</h2>
+        {domains.map((dom) => {
+          const remaining = Math.max(0, dom.total - (dom.passed + dom.failed + dom.skipped))
+          return (
+            <section key={dom.domain} className="space-y-2.5">
+              {/* 대분류 헤더 */}
+              <div className="flex items-center justify-between px-0.5">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />
+                  <h2 className="text-[13px] font-semibold tracking-tight">{dom.title}</h2>
+                </div>
+                <div className="font-mono-code flex items-center gap-3 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+                  <span style={{ color: 'var(--status-pass)' }}>PASS {dom.passed}</span>
+                  {dom.failed > 0 && <span style={{ color: 'var(--status-fail)' }}>FAIL {dom.failed}</span>}
+                  {dom.skipped > 0 && <span style={{ color: 'var(--status-skip)' }}>SKIP {dom.skipped}</span>}
+                  <span
+                    title="잔여 항목 수"
+                    style={{ color: remaining > 0 ? 'var(--text-secondary)' : 'var(--text-muted)' }}
+                  >
+                    REMAIN {remaining}
+                  </span>
+                  <span>TOTAL {dom.total}</span>
+                </div>
               </div>
-              <div className="font-mono-code flex items-center gap-3 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
-                <span style={{ color: 'var(--status-pass)' }}>PASS {dom.passed}</span>
-                {dom.failed > 0 && <span style={{ color: 'var(--status-fail)' }}>FAIL {dom.failed}</span>}
-                <span>TOTAL {dom.total}</span>
-              </div>
-            </div>
 
-            {/* 중분류 아코디언 그룹 */}
-            <div className="space-y-2">
-              {dom.categories.map((cat) => (
-                <CategoryAccordion
-                  key={cat.key}
-                  cat={cat}
-                  statusFilter={statusFilter}
-                  expanded={expandedCategories.has(cat.key)}
-                  expandedCases={expandedCases}
-                  onToggleCategory={() => onToggleCategory(cat.key)}
-                  onToggleCase={onToggleCase}
-                  registerCaseRef={registerCaseRef}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+              {/* 중분류 아코디언 그룹 */}
+              <div className="space-y-2">
+                {dom.categories.map((cat) => (
+                  <CategoryAccordion
+                    key={cat.key}
+                    cat={cat}
+                    statusFilter={statusFilter}
+                    expanded={expandedCategories.has(cat.key)}
+                    expandedCases={expandedCases}
+                    onToggleCategory={() => onToggleCategory(cat.key)}
+                    onToggleCase={onToggleCase}
+                    registerCaseRef={registerCaseRef}
+                  />
+                ))}
+              </div>
+            </section>
+          )
+        })}
       </div>
     </main>
   )

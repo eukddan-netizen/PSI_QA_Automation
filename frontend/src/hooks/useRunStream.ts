@@ -6,6 +6,7 @@ import type {
   RunState,
   RunSummary,
   RunnerStatus,
+  StartRunPayload,
   TestCaseState,
   TestStatus,
 } from '../types/run'
@@ -18,10 +19,13 @@ interface UseRunStreamResult {
   connected: boolean
   loading: boolean
   error: string | null
+  runBatchSeq: number
   selectRun: (runId: string) => Promise<void>
-  startPresetRun: (preset: CatalogPreset, keyword?: string) => Promise<void>
+  startPresetRun: (payload: StartRunPayload) => Promise<void>
+  resumeRun: (runId: string) => Promise<void>
   stopActiveRun: () => Promise<void>
-  clearAllRuns: () => Promise<void>
+  resetView: () => void
+  deleteRuns: (runIds: string[]) => Promise<void>
 }
 
 export function useRunStream(): UseRunStreamResult {
@@ -32,8 +36,10 @@ export function useRunStream(): UseRunStreamResult {
   const [connected, setConnected] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [runBatchSeq, setRunBatchSeq] = useState(0)
 
   const selectedRunIdRef = useRef<string | null>(null)
+  const resetViewRef = useRef(false)
   const pendingLogsRef = useRef<Array<{ runId: string; log: LogLine }>>([])
   const rafRef = useRef<number | null>(null)
 
@@ -73,6 +79,7 @@ export function useRunStream(): UseRunStreamResult {
   }, [])
 
   const selectRun = useCallback(async (runId: string) => {
+    resetViewRef.current = false
     selectedRunIdRef.current = runId
     try {
       const res = await fetch(`/api/runs/${encodeURIComponent(runId)}`)
@@ -158,7 +165,11 @@ export function useRunStream(): UseRunStreamResult {
 
     es.addEventListener('snapshot', (ev) => {
       const snap: RunState = JSON.parse((ev as MessageEvent).data)
+      if (resetViewRef.current && snap.status !== 'running') {
+        return
+      }
       if (!selectedRunIdRef.current || selectedRunIdRef.current === snap.run_id) {
+        resetViewRef.current = false
         selectedRunIdRef.current = snap.run_id
         setRun(snap)
       }
@@ -166,8 +177,10 @@ export function useRunStream(): UseRunStreamResult {
 
     es.addEventListener('run_start', (ev) => {
       const nextRun: RunState = JSON.parse((ev as MessageEvent).data)
+      resetViewRef.current = false
       selectedRunIdRef.current = nextRun.run_id
       pendingLogsRef.current = []
+      setRunBatchSeq((n) => n + 1)
       setRun(nextRun)
       setRunner((prev) => ({ ...prev, is_running: true, active_run_id: nextRun.run_id }))
       refreshRunsList()
@@ -266,6 +279,17 @@ export function useRunStream(): UseRunStreamResult {
       setRuns([])
     })
 
+    es.addEventListener('runs_deleted', (ev) => {
+      const data = JSON.parse((ev as MessageEvent).data) as { deleted_ids?: string[] }
+      const deletedSet = new Set(data.deleted_ids ?? [])
+      if (selectedRunIdRef.current && deletedSet.has(selectedRunIdRef.current)) {
+        selectedRunIdRef.current = null
+        pendingLogsRef.current = []
+        setRun(null)
+      }
+      refreshRunsList()
+    })
+
     es.addEventListener('run_finish', (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as {
         run_id: string
@@ -295,17 +319,21 @@ export function useRunStream(): UseRunStreamResult {
   }, [flushLogs, loadCatalog, refreshRunsList])
 
   const startPresetRun = useCallback(
-    async (preset: CatalogPreset, keyword?: string) => {
+    async (payload: StartRunPayload) => {
       setError(null)
+      resetViewRef.current = false
+      const targetRunId = payload.run_id ?? run?.run_id ?? null
       const res = await fetch('/api/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          target: preset.id,
-          markers: preset.markers ?? null,
-          paths: preset.paths ?? [],
-          keyword: keyword?.trim() || null,
-          title: preset.label,
+          target: payload.target,
+          markers: payload.markers ?? null,
+          paths: payload.paths ?? [],
+          keyword: payload.keyword?.trim() || null,
+          title: payload.title,
+          run_id: targetRunId,
+          accumulate: Boolean(targetRunId) && (payload.accumulate ?? true),
         }),
       })
       if (!res.ok) {
@@ -316,6 +344,25 @@ export function useRunStream(): UseRunStreamResult {
       }
       const started = await res.json()
       selectedRunIdRef.current = started.run_id
+      refreshRunsList()
+    },
+    [refreshRunsList, run?.run_id],
+  )
+
+  const resumeRun = useCallback(
+    async (runId: string) => {
+      setError(null)
+      resetViewRef.current = false
+      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/resume`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const msg = body.detail || '이어서 진행 시작에 실패했습니다.'
+        setError(msg)
+        throw new Error(msg)
+      }
+      selectedRunIdRef.current = runId
       refreshRunsList()
     },
     [refreshRunsList],
@@ -337,23 +384,43 @@ export function useRunStream(): UseRunStreamResult {
     }
   }, [run?.run_id, runner.active_run_id])
 
-  const clearAllRuns = useCallback(async () => {
+  const resetView = useCallback(() => {
+    resetViewRef.current = true
+    selectedRunIdRef.current = null
+    pendingLogsRef.current = []
     setError(null)
-    try {
-      const res = await fetch('/api/runs', { method: 'DELETE' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setError(body.detail || '초기화에 실패했습니다.')
-        return
-      }
-      selectedRunIdRef.current = null
-      pendingLogsRef.current = []
-      setRun(null)
-      setRuns([])
-    } catch {
-      setError('초기화 요청 중 오류가 발생했습니다.')
-    }
+    setRun(null)
   }, [])
+
+  const deleteRuns = useCallback(
+    async (runIds: string[]) => {
+      if (runIds.length === 0) return
+      setError(null)
+      try {
+        const res = await fetch('/api/runs', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ run_ids: runIds }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          setError(body.detail || '이력 삭제에 실패했습니다.')
+          return
+        }
+        const body = await res.json()
+        const deletedSet = new Set<string>(body.deleted_ids ?? runIds)
+        setRuns(body.runs ?? [])
+        if (selectedRunIdRef.current && deletedSet.has(selectedRunIdRef.current)) {
+          selectedRunIdRef.current = null
+          pendingLogsRef.current = []
+          setRun(null)
+        }
+      } catch {
+        setError('이력 삭제 요청 중 오류가 발생했습니다.')
+      }
+    },
+    [],
+  )
 
   return {
     run,
@@ -363,9 +430,12 @@ export function useRunStream(): UseRunStreamResult {
     connected,
     loading,
     error,
+    runBatchSeq,
     selectRun,
     startPresetRun,
+    resumeRun,
     stopActiveRun,
-    clearAllRuns,
+    resetView,
+    deleteRuns,
   }
 }
