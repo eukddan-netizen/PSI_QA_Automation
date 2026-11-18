@@ -6,10 +6,10 @@ import asyncio
 import json
 from typing import AsyncIterator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from dashboard.models import IngestBatchRequest, StartRunRequest
+from dashboard.models import DeleteRunsRequest, IngestBatchRequest, StartRunRequest
 from dashboard.runner_manager import runner_manager
 from dashboard.store import run_store
 
@@ -32,12 +32,27 @@ def list_runs():
 
 
 @router.delete("/api/runs")
-def clear_runs():
+def delete_runs(req: DeleteRunsRequest | None = Body(default=None)):
+    runner_status = runner_manager.get_status()
+    active_run_id = runner_status.get("active_run_id")
+
+    if req is not None and req.run_ids is not None:
+        if runner_status.get("is_running") and active_run_id in req.run_ids:
+            raise HTTPException(status_code=409, detail="현재 실행 중인 테스트 이력은 삭제할 수 없습니다. 먼저 중단해 주세요.")
+        deleted_ids = run_store.delete_runs(req.run_ids)
+        return {
+            "deleted_ids": deleted_ids,
+            "cleared": len(deleted_ids),
+            "runs": run_store.list_runs(),
+            "runner": runner_manager.get_status(),
+        }
+
     if runner_manager.is_running():
         raise HTTPException(status_code=409, detail="테스트 실행 중에는 초기화할 수 없습니다. 먼저 중단해 주세요.")
-    deleted = run_store.clear_runs()
+    deleted_ids = run_store.delete_runs(None)
     return {
-        "cleared": deleted,
+        "deleted_ids": deleted_ids,
+        "cleared": len(deleted_ids),
         "runs": run_store.list_runs(),
         "runner": runner_manager.get_status(),
     }
@@ -65,6 +80,18 @@ def start_run(req: StartRunRequest):
     try:
         result = runner_manager.start_run(req)
         return result
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/api/runs/{run_id}/resume")
+def resume_run(run_id: str):
+    try:
+        return runner_manager.resume_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except FileNotFoundError as exc:

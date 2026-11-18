@@ -21,8 +21,43 @@ from dashboard.models import (
 )
 
 
+_DOMAIN_ORDER = {"app_checks": 0, "security_checks": 1, "other": 2}
+
+
 def now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+
+def _short_title_part(title: str) -> str:
+    head, sep, _ = title.partition(" · ")
+    return head.strip() if sep else title.strip()
+
+
+def _merge_cumulative_title(existing_title: str, new_title: str) -> str:
+    existing = (existing_title or "").strip()
+    incoming = (new_title or "").strip()
+    if not existing:
+        return incoming or "QA 자동화 테스트 실행"
+    if not incoming or existing == incoming:
+        return existing
+
+    # Normalize existing parts separated by ' + ' (ignoring trailing '외 N건')
+    raw_parts = [p.strip() for p in existing.split(" + ") if p.strip()]
+    parts: list[str] = []
+    for p in raw_parts:
+        short = _short_title_part(p)
+        if short and short not in parts:
+            parts.append(short)
+
+    new_short = _short_title_part(incoming)
+    if new_short and new_short not in parts:
+        parts.append(new_short)
+
+    if len(parts) <= 1:
+        return incoming
+    if len(parts) <= 3:
+        return " + ".join(parts)
+    return f"{' + '.join(parts[:3])} 외 {len(parts) - 3}건"
 
 
 class SSEBroadcaster:
@@ -122,6 +157,11 @@ class RunStore:
                 if state.status == "running":
                     state.status = "stopped"
                     state.finished_at = state.finished_at or now_iso()
+                    state.active_nodeid = None
+                    for c in state.cases:
+                        if c.status == "running":
+                            c.status = "pending"
+                    self._recompute_summary_unlocked(state)
                 self._runs[state.run_id] = state
                 self._case_index[state.run_id] = {c.nodeid: c for c in state.cases}
                 max_seq = max(
@@ -222,6 +262,99 @@ class RunStore:
             self.broadcaster.publish(run_id, "run_start", run.model_dump())
             return run
 
+    def begin_append_run(
+        self,
+        run_id: str,
+        title: str = "QA 자동화 테스트 실행",
+        target: str = "custom",
+        environment: EnvironmentInfo | None = None,
+    ) -> RunState:
+        """Reopens an existing run for cumulative execution without clearing prior results."""
+        with self._lock:
+            existing = self._runs.get(run_id)
+            if existing is None:
+                return self.create_or_get_run(
+                    run_id=run_id,
+                    title=title,
+                    target=target,
+                    environment=environment,
+                )
+
+            existing.status = "running"
+            existing.finished_at = None
+            existing.active_nodeid = None
+            existing.title = _merge_cumulative_title(existing.title, title)
+            if target and target not in existing.target.split(","):
+                existing.target = f"{existing.target},{target}" if existing.target else target
+            if environment and environment.hostname:
+                existing.environment = environment
+
+            for c in existing.cases:
+                if c.status == "running":
+                    c.status = "pending"
+
+            seq = self._log_seq.get(run_id, 0) + 1
+            self._log_seq[run_id] = seq
+            append_log = LogLine(
+                seq=seq,
+                timestamp=now_iso(),
+                stream="system",
+                level="step",
+                stage="누적 실행",
+                text=f"[추가 실행 시작] {title}",
+                nodeid=None,
+            )
+            existing.session_logs.append(append_log)
+            self._append_log_jsonl(run_id, append_log)
+
+            self._latest_run_id = run_id
+            self._recompute_summary_unlocked(existing)
+            self._persist_run_unlocked(existing)
+            self.broadcaster.publish(run_id, "run_start", existing.model_dump())
+            return existing
+
+    def begin_resume_run(
+        self,
+        run_id: str,
+        pending_count: int,
+        environment: EnvironmentInfo | None = None,
+    ) -> RunState:
+        """Reopens a stopped/interrupted run to execute only remaining pending test cases."""
+        with self._lock:
+            existing = self._runs.get(run_id)
+            if existing is None:
+                raise KeyError(f"실행 이력을 찾을 수 없습니다: {run_id}")
+
+            existing.status = "running"
+            existing.finished_at = None
+            existing.active_nodeid = None
+            if environment and environment.hostname:
+                existing.environment = environment
+
+            for c in existing.cases:
+                if c.status == "running":
+                    c.status = "pending"
+
+            seq = self._log_seq.get(run_id, 0) + 1
+            self._log_seq[run_id] = seq
+            resume_log = LogLine(
+                seq=seq,
+                timestamp=now_iso(),
+                stream="system",
+                level="step",
+                stage="이어서 진행",
+                text=f"[이어서 실행 시작] 미완료 대기 항목 {pending_count}건 재개",
+                nodeid=None,
+            )
+            existing.session_logs.append(resume_log)
+            self._append_log_jsonl(run_id, resume_log)
+
+            self._latest_run_id = run_id
+            self._recompute_summary_unlocked(existing)
+            self._persist_run_unlocked(existing)
+            self.broadcaster.publish(run_id, "run_start", existing.model_dump())
+            return existing
+
     def apply_event(self, event: IngestEvent) -> None:
         with self._lock:
             p = event.payload
@@ -237,6 +370,8 @@ class RunStore:
                     environment=env,
                 )
                 run.status = "running"
+                run.finished_at = None
+                run.active_nodeid = None
                 if env.hostname:
                     run.environment = env
                 self._persist_run_unlocked(run)
@@ -249,9 +384,22 @@ class RunStore:
 
             if event.event_type == "collection_ready":
                 raw_cases = p.get("cases", [])
-                cases = [TestCaseState.model_validate(item) for item in raw_cases]
-                run.cases = cases
-                self._case_index[run_id] = {c.nodeid: c for c in cases}
+                new_cases = [TestCaseState.model_validate(item) for item in raw_cases]
+                new_by_nodeid = {c.nodeid: c for c in new_cases}
+                existing_pos = {c.nodeid: idx for idx, c in enumerate(run.cases)}
+                # Preserve prior cases that are not part of this run; overwrite matching nodeids
+                preserved = [c for c in run.cases if c.nodeid not in new_by_nodeid]
+                merged = preserved + new_cases
+                merged.sort(
+                    key=lambda c: (
+                        _DOMAIN_ORDER.get(c.domain, 99),
+                        c.category_id or "",
+                        c.subcategory_id or "",
+                        existing_pos.get(c.nodeid, 1_000_000),
+                    )
+                )
+                run.cases = merged
+                self._case_index[run_id] = {c.nodeid: c for c in merged}
                 summary = self._recompute_summary_unlocked(run)
                 self._persist_run_unlocked(run)
                 self.broadcaster.publish(
@@ -259,7 +407,7 @@ class RunStore:
                     "collection_ready",
                     {
                         "run_id": run_id,
-                        "cases": [c.model_dump() for c in cases],
+                        "cases": [c.model_dump() for c in merged],
                         "summary": summary.model_dump(),
                     },
                 )
@@ -344,12 +492,17 @@ class RunStore:
                 return
 
             if event.event_type == "run_finish":
-                run.status = p.get("status") or (
-                    "failed" if run.summary.failed > 0 else "completed"
-                )
+                for c in run.cases:
+                    if c.status == "running":
+                        c.status = "pending"
                 run.finished_at = event.timestamp
                 run.active_nodeid = None
                 summary = self._recompute_summary_unlocked(run)
+                incoming_status = p.get("status")
+                if incoming_status == "stopped":
+                    run.status = "stopped"
+                else:
+                    run.status = "failed" if summary.failed > 0 else "completed"
                 self._persist_run_unlocked(run)
                 self.broadcaster.publish(
                     run_id,
@@ -361,6 +514,14 @@ class RunStore:
                         "summary": summary.model_dump(),
                     },
                 )
+
+    def has_run(self, run_id: str) -> bool:
+        with self._lock:
+            return run_id in self._runs
+
+    def get_latest_run_id(self) -> str | None:
+        with self._lock:
+            return self._latest_run_id
 
     def get_run_snapshot(self, run_id: str) -> RunState | None:
         with self._lock:
@@ -375,15 +536,22 @@ class RunStore:
                 return None
             return self.get_run_snapshot(self._latest_run_id)
 
-    def clear_runs(self) -> int:
-        """Clears all non-running runs from memory, SQLite, and log files."""
+    def delete_runs(self, run_ids: list[str] | None = None) -> list[str]:
+        """Deletes selected (or all non-running) runs from memory, SQLite, and log files."""
         with self._lock:
-            to_delete = [rid for rid, r in self._runs.items() if r.status != "running"]
+            if run_ids is None:
+                candidates = list(self._runs.keys())
+            else:
+                candidates = list(dict.fromkeys(run_ids))
+
+            to_delete = [
+                rid for rid in candidates if rid in self._runs and self._runs[rid].status != "running"
+            ]
             for rid in to_delete:
                 self._runs.pop(rid, None)
                 self._case_index.pop(rid, None)
                 self._log_seq.pop(rid, None)
-                for pattern in (f"{rid}.logs.jsonl", f"{rid}.proc.log"):
+                for pattern in (f"{rid}.logs.jsonl", f"{rid}.proc.log", f"{rid}.resume.json"):
                     p = RUNS_DATA_DIR / pattern
                     if p.exists():
                         try:
@@ -401,12 +569,23 @@ class RunStore:
                     conn.execute(f"DELETE FROM runs WHERE run_id IN ({placeholders})", to_delete)
                     conn.commit()
 
-            self.broadcaster.publish(
-                "__all__",
-                "runs_cleared",
-                {"active_run_id": self._latest_run_id},
-            )
-            return len(to_delete)
+                if run_ids is None:
+                    self.broadcaster.publish(
+                        "__all__",
+                        "runs_cleared",
+                        {"active_run_id": self._latest_run_id},
+                    )
+                else:
+                    self.broadcaster.publish(
+                        "__all__",
+                        "runs_deleted",
+                        {"deleted_ids": to_delete, "active_run_id": self._latest_run_id},
+                    )
+            return to_delete
+
+    def clear_runs(self) -> int:
+        """Clears all non-running runs from memory, SQLite, and log files."""
+        return len(self.delete_runs(None))
 
     def list_runs(self) -> list[dict[str, Any]]:
         with self._lock:

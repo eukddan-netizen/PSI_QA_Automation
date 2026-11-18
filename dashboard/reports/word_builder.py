@@ -16,6 +16,7 @@ from dashboard.reports.formatter import (
     STATUS_LABELS,
     format_case_detail_gaejosik,
     format_case_note,
+    format_duration_ko,
     prepare_report_data,
 )
 
@@ -123,7 +124,7 @@ def build_word_report(run: RunState) -> bytes:
     overview_pairs = [
         ("점검 대상", run.title, "실행 상태", data.run_status_label),
         ("점검 일시", data.period_text, "보고서 기준 시각", data.snapshot_time),
-        ("실행 환경", data.env_text, "누적 소요 시간", f"{data.total_duration:.2f}초"),
+        ("실행 환경", data.env_text, "누적 소요 시간", format_duration_ko(data.total_duration)),
     ]
     col_w = [Mm(30), Mm(62), Mm(32), Mm(50)]
     for r_idx, (k1, v1, k2, v2) in enumerate(overview_pairs):

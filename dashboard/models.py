@@ -101,6 +101,12 @@ class StartRunRequest(BaseModel):
     keyword: str | None = None
     paths: list[str] = Field(default_factory=list)
     title: str | None = None
+    run_id: str | None = None
+    accumulate: bool = True
+
+
+class DeleteRunsRequest(BaseModel):
+    run_ids: list[str] | None = None
 
 
 class CatalogTargetPreset(BaseModel):

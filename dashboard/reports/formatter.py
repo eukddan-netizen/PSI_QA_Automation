@@ -57,6 +57,21 @@ class PreparedReportData:
     all_cases: list[TestCaseState]
 
 
+def format_duration_ko(seconds: float) -> str:
+    """Formats duration as 'xx.xx초' under 1 minute, or 'xx분 xx초' (with hours if >= 1h)."""
+    if seconds < 0:
+        return "0.00초"
+    if seconds < 60:
+        return f"{seconds:.2f}초"
+    total_sec = round(seconds)
+    hours = total_sec // 3600
+    minutes = (total_sec % 3600) // 60
+    secs = total_sec % 60
+    if hours > 0:
+        return f"{hours}시간 {minutes:02d}분 {secs:02d}초"
+    return f"{minutes}분 {secs:02d}초"
+
+
 def to_gaejosik(text: str, default_end: str = "함") -> str:
     """Normalizes a Korean sentence into concise government bullet phrasing (~함/~임/~됨)."""
     cleaned = re.sub(r"\s+", " ", (text or "").strip())

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import ctypes
 import inspect
+import json
 import os
 import platform
 import queue
 import re
+import signal
 import socket
 import sys
 import threading
@@ -15,6 +17,7 @@ import time
 import uuid
 from contextvars import ContextVar
 from datetime import datetime
+from pathlib import Path
 from typing import Any, TextIO
 
 import httpx
@@ -202,6 +205,8 @@ class DashboardPytestPlugin:
         self._tokens: dict[str, Any] = {}
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
+        if hasattr(signal, "SIGBREAK"):
+            signal.signal(signal.SIGBREAK, signal.default_int_handler)
         self.emitter.emit(
             "run_start",
             {
@@ -216,8 +221,25 @@ class DashboardPytestPlugin:
         sys.stderr = _TeeStream(self._orig_stderr, "stderr", self.emitter)  # type: ignore[assignment]
 
     def pytest_collection_modifyitems(self, session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
+        resume_file = os.environ.get("PSI_DASHBOARD_RESUME_FILE")
+        if resume_file:
+            resume_path = Path(resume_file)
+            if resume_path.exists():
+                try:
+                    pending_nodeids = json.loads(resume_path.read_text(encoding="utf-8"))
+                    if isinstance(pending_nodeids, list):
+                        pending_set = set(pending_nodeids)
+                        selected = [item for item in items if item.nodeid in pending_set]
+                        deselected = [item for item in items if item.nodeid not in pending_set]
+                        if deselected:
+                            config.hook.pytest_deselected(items=deselected)
+                        items[:] = selected
+                except Exception:
+                    pass
+
+    def pytest_collection_finish(self, session: pytest.Session) -> None:
         cases = []
-        for item in items:
+        for item in session.items:
             doc = ""
             obj = getattr(item, "obj", None)
             if obj is not None:
@@ -336,7 +358,7 @@ def _extract_short_error(report: pytest.TestReport) -> str:
 
 def _build_case_summary(outcome: str, duration: float, error_message: str) -> str:
     if outcome == "passed":
-        return f"정상 검증 완료함 ({duration:.2f}s)"
+        return f"정상 검증 완료함 ({duration:.2f}초)"
     if outcome == "skipped":
         reason = error_message or "실행 조건 미충족"
         return f"점검 제외됨: {reason}"
