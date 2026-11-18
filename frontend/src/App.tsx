@@ -73,7 +73,7 @@ export function App() {
         onDeleteRuns={deleteRuns}
       />
 
-      <SummaryStrip run={run} />
+      <SummaryStrip run={run} historyCount={runs.length} />
 
       {error && (
         <div
@@ -107,6 +107,7 @@ export function App() {
           />
           <ExecutionStream
             run={run}
+            historyCount={runs.length}
             domains={domains}
             statusFilter={statusFilter}
             autoFollow={autoFollow}

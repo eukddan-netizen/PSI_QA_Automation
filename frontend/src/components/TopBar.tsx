@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FileSpreadsheet,
   FileText,
+  Monitor,
   Moon,
   Play,
   RotateCcw,
@@ -9,7 +10,6 @@ import {
   Square,
   StepForward,
   Sun,
-  Terminal,
 } from 'lucide-react'
 import type { CatalogPreset, RunListItem, RunState, RunnerStatus, StartRunPayload } from '../types/run'
 import { RunHistorySelector } from './RunHistorySelector'
@@ -128,7 +128,7 @@ export function TopBar({
               color: 'var(--text-header)',
             }}
           >
-            <Terminal className="h-3.5 w-3.5" />
+            <Monitor className="h-3.5 w-3.5" />
           </div>
           <div className="leading-tight">
             <div className="text-[13px] font-semibold tracking-tight" style={{ color: 'var(--text-header)' }}>

@@ -39,7 +39,7 @@ export function useRunStream(): UseRunStreamResult {
   const [runBatchSeq, setRunBatchSeq] = useState(0)
 
   const selectedRunIdRef = useRef<string | null>(null)
-  const resetViewRef = useRef(false)
+  const resetViewRef = useRef(true)
   const pendingLogsRef = useRef<Array<{ runId: string; log: LogLine }>>([])
   const rafRef = useRef<number | null>(null)
 
@@ -140,11 +140,12 @@ export function useRunStream(): UseRunStreamResult {
         const res = await fetch('/api/runs/latest')
         if (res.ok && !cancelled) {
           const data = await res.json()
-          if (data.run) {
+          if (data.run && data.run.status === 'running' && !selectedRunIdRef.current) {
+            resetViewRef.current = false
             selectedRunIdRef.current = data.run.run_id
             setRun(data.run)
           }
-              if (data.runner) setRunner(data.runner)
+          if (data.runner) setRunner(data.runner)
         }
       } finally {
         if (!cancelled) setLoading(false)

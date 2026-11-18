@@ -6,13 +6,14 @@ import {
   FolderOpen,
   Minimize2,
   Maximize2,
-  Terminal,
+  Monitor,
 } from 'lucide-react'
 import type { CategoryGroup, DomainGroup, LogLine, RunState, TestCaseState } from '../types/run'
 import { StatusBadge, StatusDot } from './StatusBadge'
 
 interface ExecutionStreamProps {
   run: RunState | null
+  historyCount?: number
   domains: DomainGroup[]
   statusFilter: 'all' | 'failed' | 'running' | 'passed'
   autoFollow: boolean
@@ -28,6 +29,7 @@ interface ExecutionStreamProps {
 
 export function ExecutionStream({
   run,
+  historyCount = 0,
   domains,
   statusFilter,
   autoFollow,
@@ -52,15 +54,12 @@ export function ExecutionStream({
             borderColor: 'var(--border-subtle)',
           }}
         >
-          <Terminal className="mx-auto mb-3 h-7 w-7" style={{ color: 'var(--text-muted)' }} />
+          <Monitor className="mx-auto mb-3 h-7 w-7" style={{ color: 'var(--text-muted)' }} />
           <h2 className="text-[14px] font-semibold">QA 자동화 실시간 로그 대기 중</h2>
           <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            상단에서 테스트 프리셋(예: app_checks 전체)을 선택해 실행하거나,
-            관리자 권한 PowerShell에서{' '}
-            <code className="font-mono-code rounded px-1 py-0.5 text-[11.5px]" style={{ backgroundColor: 'var(--bg-subtle)' }}>
-              .\run.ps1 app -Dashboard
-            </code>{' '}
-            명령으로 실행하면 실시간 로그가 이곳에 스트리밍됩니다.
+            {historyCount > 0
+              ? '우측 상단에서 실행 대상을 체크해 테스트를 시작하거나, 좌측 상단 실행 이력에서 이전 결과를 불러올 수 있습니다.'
+              : '우측 상단에서 실행 대상을 체크하고 테스트 실행 버튼을 누르면 실시간 로그가 이곳에 스트리밍됩니다.'}
           </p>
         </div>
       </main>

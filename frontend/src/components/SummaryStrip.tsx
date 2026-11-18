@@ -1,6 +1,6 @@
 import { formatDuration, type RunState } from '../types/run'
 
-export function SummaryStrip({ run }: { run: RunState | null }) {
+export function SummaryStrip({ run, historyCount = 0 }: { run: RunState | null; historyCount?: number }) {
   if (!run) {
     return (
       <div
@@ -11,7 +11,11 @@ export function SummaryStrip({ run }: { run: RunState | null }) {
           color: 'var(--text-muted)',
         }}
       >
-        <span>실행 중인 테스트가 없습니다. 상단에서 대상을 선택해 실행하거나 PowerShell에서 `pytest --dashboard`를 실행하세요.</span>
+        <span>
+          {historyCount > 0
+            ? `현재 선택된 테스트가 없습니다. 우측 상단에서 대상을 선택해 실행하거나, 좌측 실행 이력(${historyCount}건)에서 이전 결과를 불러오세요.`
+            : '실행 중인 테스트가 없습니다. 우측 상단에서 대상을 선택해 테스트를 시작하세요.'}
+        </span>
       </div>
     )
   }
