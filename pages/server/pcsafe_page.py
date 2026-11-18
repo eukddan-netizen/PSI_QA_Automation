@@ -185,8 +185,8 @@ class AdminPcsafePage(AdminBasePage):
     def get_user_modal_info(self, user_ip: Optional[str] = None) -> Dict[str, str]:
         """
         /pcsafe 사용자 목록에서 해당 IP 행의 '사용자' 컬럼 버튼을 클릭해
-        사용자 정보 모달(ClientFormModal)을 열고 사번/사용자명을 추출한 뒤 모달을 닫습니다.
-        반환값: {'emp_no': '...', 'username': '...'}
+        사용자 정보 모달(ClientFormModal)을 열고 사번/사용자명/갱신일을 추출한 뒤 모달을 닫습니다.
+        반환값: {'emp_no': '...', 'username': '...', 'updated_at': 'YYYY-MM-DD HH:MM:SS'}
         """
         self.bring_to_front()
         target_ip, row = self._get_user_row(user_ip=user_ip)
@@ -201,6 +201,7 @@ class AdminPcsafePage(AdminBasePage):
 
         emp_no = ""
         username = ""
+        updated_at = ""
         try:
             emp_input = (
                 modal.locator("div.flex.w-full")
@@ -214,12 +215,24 @@ class AdminPcsafePage(AdminBasePage):
                 .locator("input")
                 .first
             )
+            updated_row = (
+                modal.locator("div.flex.w-full")
+                .filter(has=self.page.locator("div.font-semibold", has_text=re.compile(r"^\s*갱신일\s*$")))
+                .first
+            )
 
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 emp_no = emp_input.input_value().strip()
                 username = name_input.input_value().strip()
-                if emp_no and username:
+                try:
+                    updated_text = updated_row.inner_text().strip()
+                    m = re.search(r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}", updated_text)
+                    if m:
+                        updated_at = re.sub(r"\s+", " ", m.group(0)).strip()
+                except Exception:
+                    pass
+                if emp_no and username and updated_at:
                     break
                 self.page.wait_for_timeout(200)
         finally:
@@ -228,7 +241,10 @@ class AdminPcsafePage(AdminBasePage):
                 close_btn.click()
                 modal.wait_for(state="hidden", timeout=5000)
 
-        print(f">>> [관리자 웹] 모달 조회 결과 -> 사번: {emp_no!r}, 사용자명: {username!r}")
-        return {"emp_no": emp_no, "username": username}
+        print(
+            f">>> [관리자 웹] 모달 조회 결과 -> 사번: {emp_no!r}, "
+            f"사용자명: {username!r}, 갱신일: {updated_at!r}"
+        )
+        return {"emp_no": emp_no, "username": username, "updated_at": updated_at}
 
 
