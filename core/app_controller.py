@@ -5,6 +5,7 @@
 - UI Automation 기반 창 제어
 """
 
+from contextlib import contextmanager
 import os
 import sys
 import time
@@ -110,6 +111,27 @@ class AppController:
         self.main_window = self.app.window(handle=self.hwnd)
         return self.main_window
 
+    @staticmethod
+    @contextmanager
+    def _per_monitor_dpi():
+        """스레드 DPI 인식을 Per-Monitor Aware v2(-4)로 임시 전환합니다."""
+        user32 = ctypes.windll.user32
+        prev_ctx = None
+        try:
+            user32.SetThreadDpiAwarenessContext.argtypes = [wintypes.HANDLE]
+            user32.SetThreadDpiAwarenessContext.restype = wintypes.HANDLE
+            prev_ctx = user32.SetThreadDpiAwarenessContext(wintypes.HANDLE(-4))
+        except Exception:
+            prev_ctx = None
+        try:
+            yield user32
+        finally:
+            if prev_ctx:
+                try:
+                    user32.SetThreadDpiAwarenessContext(prev_ctx)
+                except Exception:
+                    pass
+
     def _open_tray_overflow(self) -> None:
         """작업표시줄 숨겨진 아이콘 영역(오버플로)이 닫혀 있으면 엽니다."""
         ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
@@ -122,33 +144,66 @@ class AppController:
             if tray:
                 tray_app = Application(backend="uia").connect(handle=tray)
                 tray_win = tray_app.window(handle=tray)
+                chevron_btn = None
                 for b in tray_win.descendants(control_type="Button"):
-                    if (b.element_info.name or "") == "숨겨진 아이콘 표시":
-                        b.invoke()
-                        opened = True
-                        time.sleep(0.7)
+                    b_name = (b.element_info.name or "").strip()
+                    b_aid = (b.element_info.automation_id or "").strip()
+                    if (
+                        "숨겨진 아이콘 표시" in b_name
+                        or "Show hidden icons" in b_name
+                        or "SystemTrayChevron" in b_aid
+                    ):
+                        chevron_btn = b
                         break
+                if chevron_btn is not None:
+                    try:
+                        chevron_btn.invoke()
+                        opened = True
+                    except Exception:
+                        rect = chevron_btn.rectangle()
+                        if rect.width() > 0 and rect.height() > 0:
+                            cx = (rect.left + rect.right) // 2
+                            cy = (rect.top + rect.bottom) // 2
+                            user32 = ctypes.windll.user32
+                            user32.SetCursorPos(cx, cy)
+                            time.sleep(0.05)
+                            user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                            time.sleep(0.05)
+                            user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+                            opened = True
+                    if opened:
+                        time.sleep(0.7)
         except Exception:
             pass
 
         if not opened:
             user32 = ctypes.windll.user32
-            user32.SetCursorPos(1515, 1170)
+            screen_w = user32.GetSystemMetrics(0)
+            screen_h = user32.GetSystemMetrics(1)
+            fx = int(screen_w * 0.79) if screen_w else 1515
+            fy = screen_h - 30 if screen_h else 1170
+            print(f">>> [트레이] '숨겨진 아이콘 표시' UIA 버튼 미발견 — 폴백 좌표 클릭: ({fx}, {fy})")
+            user32.SetCursorPos(fx, fy)
             time.sleep(0.05)
-            user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 1515, 1170, 0, 0)
+            user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
             time.sleep(0.05)
-            user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 1515, 1170, 0, 0)
+            user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
             time.sleep(0.8)
 
     def _close_tray_overflow(self) -> None:
         """열려 있는 숨겨진 아이콘 오버플로 창을 UIA 버튼 이벤트로 닫습니다."""
+        ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
+        if not (ov and win32gui.IsWindowVisible(ov)):
+            return
+
         try:
             tray = win32gui.FindWindow("Shell_TrayWnd", None)
             if tray:
                 tray_app = Application(backend="uia").connect(handle=tray)
                 tray_win = tray_app.window(handle=tray)
                 for b in tray_win.descendants(control_type="Button"):
-                    if "숨겨진 아이콘 표시 숨기기" in (b.element_info.name or ""):
+                    b_name = (b.element_info.name or "").strip()
+                    if "숨겨진 아이콘" in b_name or "Show hidden icons" in b_name:
                         b.invoke()
                         time.sleep(0.4)
                         return
@@ -157,32 +212,43 @@ class AppController:
 
         ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
         if ov and win32gui.IsWindowVisible(ov):
-            user32 = ctypes.windll.user32
-            user32.SetCursorPos(1515, 1170)
-            time.sleep(0.05)
-            user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 1515, 1170, 0, 0)
-            time.sleep(0.05)
-            user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 1515, 1170, 0, 0)
-            time.sleep(0.3)
+            try:
+                win32gui.PostMessage(ov, win32con.WM_KEYDOWN, win32con.VK_ESCAPE, 0)
+                win32gui.PostMessage(ov, win32con.WM_KEYUP, win32con.VK_ESCAPE, 0)
+                time.sleep(0.3)
+            except Exception:
+                pass
 
     @staticmethod
-    def _find_ta_icon_center_in_hwnd(hwnd: int) -> Optional[Tuple[int, int]]:
+    def _find_ta_icon_center_in_hwnd(hwnd: int, is_overflow: bool = False) -> Optional[Tuple[int, int]]:
         """지정된 윈도우 핸들 내에서 TA-STR / TA-PRS 트레이 아이콘의 중앙 좌표를 탐색합니다."""
         if not hwnd or not win32gui.IsWindowVisible(hwnd):
             return None
-        try:
+        user32 = ctypes.windll.user32
+        screen_w = user32.GetSystemMetrics(0) or 1920
+        screen_h = user32.GetSystemMetrics(1) or 1200
+
+        def _scan() -> Optional[Tuple[int, int, str, object]]:
             app = Application(backend="uia").connect(handle=hwnd)
             win = app.window(handle=hwnd)
             candidates = []
             for b in win.descendants(control_type="Button"):
-                name = b.element_info.name or ""
-                if "TA-STR" in name or "TA-PRS" in name:
-                    rect = b.rectangle()
-                    if rect.width() <= 0 or rect.height() <= 0:
+                name = (b.element_info.name or "").strip()
+                aid = (b.element_info.automation_id or "").strip()
+                if "TA-STR" not in name and "TA-PRS" not in name:
+                    continue
+                # Shell_TrayWnd 내 실행 중인 앱 작업표시줄 버튼(Chrome/브라우저 등) 오탐 방지
+                if not is_overflow:
+                    if aid.startswith("Appid:") or "Chrome" in name or "Edge" in name:
                         continue
-                    if rect.left <= 0 and rect.top <= 0 and rect.right <= 0:
-                        continue
-                    candidates.append((rect.width(), name, rect))
+                rect = b.rectangle()
+                if rect.width() <= 0 or rect.height() <= 0:
+                    continue
+                if rect.right <= 0 or rect.bottom <= 0 or rect.left >= screen_w or rect.top >= screen_h:
+                    continue
+                if not is_overflow and rect.left < screen_w // 2:
+                    continue
+                candidates.append((rect.width(), name, rect))
 
             if not candidates:
                 return None
@@ -198,7 +264,22 @@ class AppController:
             else:
                 cx = (rect.left + rect.right) // 2
             cy = (rect.top + rect.bottom) // 2
-            print(f">>> [트레이 탐색] '{name}' 위치=({cx}, {cy}), rect={rect}")
+            if not (0 <= cx < screen_w and 0 <= cy < screen_h):
+                return None
+            return cx, cy, name, rect
+
+        try:
+            first = _scan()
+            if first is None:
+                return None
+            if is_overflow:
+                # 오버플로 창 애니메이션으로 좌표가 흔들리는 현상 방지를 위해 안정화 대기
+                time.sleep(0.15)
+                second = _scan()
+                if second is not None:
+                    first = second
+            cx, cy, name, rect = first
+            print(f">>> [트레이 탐색] '{name}' 위치=({cx}, {cy}), rect={rect}, overflow={is_overflow}")
             return cx, cy
         except Exception:
             pass
@@ -212,7 +293,7 @@ class AppController:
         반환값: (x, y, opened_overflow)
         """
         tray_hwnd = win32gui.FindWindow("Shell_TrayWnd", None)
-        pos = self._find_ta_icon_center_in_hwnd(tray_hwnd)
+        pos = self._find_ta_icon_center_in_hwnd(tray_hwnd, is_overflow=False)
         if pos is not None:
             return pos[0], pos[1], False
 
@@ -221,7 +302,7 @@ class AppController:
         while time.time() < deadline:
             ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
             if ov and win32gui.IsWindowVisible(ov):
-                pos = self._find_ta_icon_center_in_hwnd(ov)
+                pos = self._find_ta_icon_center_in_hwnd(ov, is_overflow=True)
                 if pos is not None:
                     return pos[0], pos[1], True
             time.sleep(0.2)
@@ -232,35 +313,48 @@ class AppController:
 
     def _double_click_tray_icon(self):
         """작업표시줄 또는 숨겨진 아이콘 영역에서 보안점검 아이콘 더블클릭"""
-        user32 = ctypes.windll.user32
-        prev_ctx = None
-        try:
-            user32.SetThreadDpiAwarenessContext.argtypes = [wintypes.HANDLE]
-            user32.SetThreadDpiAwarenessContext.restype = wintypes.HANDLE
-            prev_ctx = user32.SetThreadDpiAwarenessContext(wintypes.HANDLE(-4))
-        except Exception:
-            prev_ctx = None
-
-        try:
+        with self._per_monitor_dpi() as user32:
             cx, cy, opened_overflow = self._locate_ta_tray_icon()
 
             user32.SetCursorPos(cx, cy)
             time.sleep(0.1)
             for _ in range(2):
-                user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, cx, cy, 0, 0)
+                user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
                 time.sleep(0.05)
-                user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
+                user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
                 time.sleep(0.08)
             time.sleep(0.6)
 
             if opened_overflow:
                 self._close_tray_overflow()
-        finally:
-            if prev_ctx:
-                try:
-                    user32.SetThreadDpiAwarenessContext(prev_ctx)
-                except Exception:
-                    pass
+
+    @staticmethod
+    def _find_menu_item_center(menu_hwnd: int, item_name: str, fallback_ratio: float) -> Tuple[int, int]:
+        """#32768 컨텍스트 메뉴에서 대상 항목의 중앙 좌표를 계산합니다 (HMENU 텍스트 탐색 우선)."""
+        rect = win32gui.GetWindowRect(menu_hwnd)
+        cx = (rect[0] + rect[2]) // 2
+        try:
+            hmenu = ctypes.windll.user32.SendMessageW(menu_hwnd, 0x01E1, 0, 0)  # MN_GETHMENU
+            if hmenu:
+                count = win32gui.GetMenuItemCount(hmenu)
+                for idx in range(count):
+                    try:
+                        text = win32gui.GetMenuString(hmenu, idx, win32con.MF_BYPOSITION) or ""
+                    except Exception:
+                        text = ""
+                    clean = text.replace("&", "").strip()
+                    if item_name in clean:
+                        item_rect = wintypes.RECT()
+                        if ctypes.windll.user32.GetMenuItemRect(0, hmenu, idx, ctypes.byref(item_rect)):
+                            if item_rect.right > item_rect.left and item_rect.bottom > item_rect.top:
+                                return (
+                                    (item_rect.left + item_rect.right) // 2,
+                                    (item_rect.top + item_rect.bottom) // 2,
+                                )
+        except Exception:
+            pass
+        cy = rect[1] + int((rect[3] - rect[1]) * fallback_ratio)
+        return cx, cy
 
     def click_tray_menu_item(self, item_name: str, timeout: float = 10.0) -> None:
         """
@@ -271,53 +365,56 @@ class AppController:
         if item_name not in self.TRAY_MENU_RATIOS:
             raise ValueError(f"지원하지 않는 트레이 메뉴 항목입니다: {item_name}")
 
-        user32 = ctypes.windll.user32
-        ix, iy, opened_overflow = self._locate_ta_tray_icon()
+        with self._per_monitor_dpi() as user32:
+            ix, iy, opened_overflow = self._locate_ta_tray_icon()
 
-        user32.SetCursorPos(ix, iy)
-        time.sleep(0.1)
-        user32.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0)
-        time.sleep(0.05)
-        user32.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
+            user32.SetCursorPos(ix, iy)
+            time.sleep(0.12)
+            user32.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0)
+            time.sleep(0.05)
+            user32.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
 
-        menu_hwnd = 0
-        start = time.time()
-        while time.time() - start < timeout:
-            h = win32gui.FindWindow("#32768", None)
-            if h and win32gui.IsWindowVisible(h):
-                menu_hwnd = h
-                break
-            time.sleep(0.2)
+            menu_hwnd = 0
+            start = time.time()
+            while time.time() - start < timeout:
+                h = win32gui.FindWindow("#32768", None)
+                if h and win32gui.IsWindowVisible(h):
+                    mrect = win32gui.GetWindowRect(h)
+                    if mrect[2] > mrect[0] and mrect[3] > mrect[1]:
+                        menu_hwnd = h
+                        break
+                time.sleep(0.15)
 
-        if not menu_hwnd:
-            if opened_overflow:
-                self._close_tray_overflow()
-            raise TimeoutError("트레이 우클릭 컨텍스트 메뉴(#32768)가 열리지 않았습니다.")
+            if not menu_hwnd:
+                if opened_overflow:
+                    self._close_tray_overflow()
+                raise TimeoutError("트레이 우클릭 컨텍스트 메뉴(#32768)가 열리지 않았습니다.")
 
-        rect = win32gui.GetWindowRect(menu_hwnd)
-        cx = (rect[0] + rect[2]) // 2
-        cy = rect[1] + int((rect[3] - rect[1]) * self.TRAY_MENU_RATIOS[item_name])
-
-        user32.SetCursorPos(cx, cy)
-        time.sleep(0.15)
-        user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-        time.sleep(0.05)
-        user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-        time.sleep(0.6)
-
-        still_open = win32gui.FindWindow("#32768", None)
-        if still_open and win32gui.IsWindowVisible(still_open):
-            user32.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
-            user32.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
-            if opened_overflow:
-                self._close_tray_overflow()
-            raise PermissionError(
-                f"트레이 메뉴 '{item_name}' 클릭 후 메뉴가 닫히지 않았습니다. "
-                "관리자 권한 콘솔에서 실행 중인지 확인하십시오."
+            time.sleep(0.1)
+            cx, cy = self._find_menu_item_center(
+                menu_hwnd, item_name, self.TRAY_MENU_RATIOS[item_name]
             )
 
-        if opened_overflow:
-            self._close_tray_overflow()
+            user32.SetCursorPos(cx, cy)
+            time.sleep(0.15)
+            user32.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+            time.sleep(0.05)
+            user32.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            time.sleep(0.6)
+
+            still_open = win32gui.FindWindow("#32768", None)
+            if still_open and win32gui.IsWindowVisible(still_open):
+                user32.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
+                user32.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
+                if opened_overflow:
+                    self._close_tray_overflow()
+                raise PermissionError(
+                    f"트레이 메뉴 '{item_name}' 클릭 후 메뉴가 닫히지 않았습니다. "
+                    "관리자 권한 콘솔에서 실행 중인지 확인하십시오."
+                )
+
+            if opened_overflow:
+                self._close_tray_overflow()
 
     @staticmethod
     def _find_tray_dialogs(exclude_hwnds: Optional[set] = None) -> List[Tuple[int, str]]:

@@ -16,6 +16,7 @@ import win32gui
 import winreg
 from pywinauto import Application
 
+from core.desktop_utils import bring_window_to_front
 from pages.client.main_page import MainPage
 
 
@@ -441,34 +442,54 @@ class HistoryPage(MainPage):
         """
         #32770 다이얼로그에서 파일명 입력 Edit 및 저장 버튼을 탐색합니다.
         UIA 백엔드의 COM 인터페이스 충돌(0x80040155, 0x8001010d fatal exception 콘솔 덤프)을
-        방지하기 위해 표준 win32 백엔드를 우선 사용합니다.
+        방지하기 위해 EnumChildWindows + 표준 win32 백엔드를 우선 사용합니다.
         """
         try:
             dlg_app = Application(backend="win32").connect(handle=dlg_hwnd)
             dlg_win = dlg_app.window(handle=dlg_hwnd)
 
-            filename_edit = None
-            # standard win32 File Dialog Edit control (id 1148 or 1001 or class Edit)
-            for ctrl in dlg_win.children(class_name="Edit"):
-                ctrl_id = ctrl.control_id()
-                if ctrl_id in (1148, 1001) or "Edit" in ctrl.friendly_class_name():
-                    filename_edit = ctrl
-                    break
-            if filename_edit is None:
-                edits = dlg_win.children(class_name="Edit")
-                if edits:
-                    filename_edit = edits[0]
+            edit_candidates: List[Tuple[int, int, str]] = []
+            save_btn_hwnd = 0
 
-            save_btn = None
-            for bt in dlg_win.children(class_name="Button"):
-                bt_text = (bt.window_text() or "").strip()
-                bt_id = bt.control_id()
-                if bt_id == 1 or bt_text in ("저장(&S)", "저장(S)", "저장", "&Save", "Save"):
-                    save_btn = bt
-                    break
+            def _enum_cb(ch, _):
+                nonlocal save_btn_hwnd
+                cls = win32gui.GetClassName(ch)
+                ctrl_id = win32gui.GetDlgCtrlID(ch)
+                txt = (win32gui.GetWindowText(ch) or "").strip()
 
-            if filename_edit is not None and save_btn is not None:
-                return dlg_win, filename_edit, save_btn
+                if cls == "Edit":
+                    parent = win32gui.GetParent(ch)
+                    parent_cls = win32gui.GetClassName(parent) if parent else ""
+                    if parent_cls == "ComboBox" or ctrl_id in (1148, 1001):
+                        edit_candidates.append((ctrl_id, ch, txt))
+                elif cls == "Button" and not save_btn_hwnd:
+                    clean_txt = txt.replace("&", "")
+                    if ctrl_id == 1 or clean_txt in ("저장(S)", "저장", "Save(S)", "Save"):
+                        save_btn_hwnd = ch
+
+            win32gui.EnumChildWindows(dlg_hwnd, _enum_cb, None)
+
+            filename_edit_hwnd = 0
+            # 파일명 입력란(기본값 .xlsx 또는 비어 있지 않은 Edit / ID 1001, 1148) 우선 선택
+            for ctrl_id, ch, txt in edit_candidates:
+                if ".xlsx" in txt.lower() or "내pc보안점검" in txt.lower():
+                    filename_edit_hwnd = ch
+                    break
+            if not filename_edit_hwnd and edit_candidates:
+                # 주소창/검색창보다 파일명 ComboBox(1148 > 1001)가 보통 마지막에 위치하거나 1148
+                for ctrl_id, ch, _ in reversed(edit_candidates):
+                    if ctrl_id in (1148, 1001):
+                        filename_edit_hwnd = ch
+                        break
+                if not filename_edit_hwnd:
+                    filename_edit_hwnd = edit_candidates[-1][1]
+
+            if filename_edit_hwnd and save_btn_hwnd:
+                return (
+                    dlg_win,
+                    dlg_app.window(handle=filename_edit_hwnd).wrapper_object(),
+                    dlg_app.window(handle=save_btn_hwnd).wrapper_object(),
+                )
         except Exception:
             pass
 
@@ -477,18 +498,25 @@ class HistoryPage(MainPage):
         dlg_win = dlg_app.window(handle=dlg_hwnd)
 
         filename_edit = None
+        fallback_edit = None
         for ed in dlg_win.descendants(control_type="Edit"):
             ed_name = (ed.element_info.name or "").strip()
             ed_aid = (ed.element_info.automation_id or "").strip()
-            if "파일 이름" in ed_name or "File name" in ed_name or ed_aid in ("1001", "1148"):
-                if "주소" not in ed_name:
-                    filename_edit = ed
-                    break
+            if any(skip in ed_name for skip in ("주소", "Address", "검색", "Search")):
+                continue
+            if "파일 이름" in ed_name or "File name" in ed_name:
+                filename_edit = ed
+                break
+            if ed_aid in ("1001", "1148") and fallback_edit is None:
+                fallback_edit = ed
+        if filename_edit is None:
+            filename_edit = fallback_edit
 
         save_btn = None
         for bt in dlg_win.descendants(control_type="Button"):
-            bt_name = (bt.element_info.name or "").strip()
-            if bt_name in ("저장(S)", "저장(&S)", "저장", "Save"):
+            bt_name = (bt.element_info.name or "").strip().replace("&", "")
+            bt_aid = (bt.element_info.automation_id or "").strip()
+            if bt_aid == "1" or bt_name in ("저장(S)", "저장", "Save(S)", "Save"):
                 save_btn = bt
                 break
 
@@ -505,11 +533,31 @@ class HistoryPage(MainPage):
         2) 바탕화면 경로(<desktop_dir>/<filename>)로 지정해 저장합니다.
         """
         dlg_hwnd = self._find_save_as_dialog(timeout=timeout)
+        bring_window_to_front(dlg_hwnd)
+        time.sleep(0.2)
+
         target_dir = desktop_dir or get_user_desktop_dir()
         target_dir.mkdir(parents=True, exist_ok=True)
 
+        def _trigger_save(btn_ctrl) -> None:
+            # UIA Button이면 invoke() 우선, Win32 Button이면 BM_CLICK 우선
+            if hasattr(btn_ctrl, "invoke"):
+                try:
+                    btn_ctrl.invoke()
+                    return
+                except Exception:
+                    pass
+            btn_hwnd = getattr(btn_ctrl, "handle", None)
+            if btn_hwnd:
+                try:
+                    win32gui.PostMessage(btn_hwnd, win32con.BM_CLICK, 0, 0)
+                    return
+                except Exception:
+                    pass
+            btn_ctrl.click()
+
         try:
-            _, filename_edit, save_btn = self._find_filename_edit_and_save_btn(dlg_hwnd)
+            dlg_win, filename_edit, save_btn = self._find_filename_edit_and_save_btn(dlg_hwnd)
             if filename_edit is None or save_btn is None:
                 raise PermissionError(
                     "파일 저장 다이얼로그(#32770) 내부 컨트롤에 접근할 수 없습니다. "
@@ -532,13 +580,25 @@ class HistoryPage(MainPage):
                 save_path.unlink()
 
             print(f">>> [HistoryPage] 엑셀 저장 경로 입력: {save_path}")
+            try:
+                filename_edit.set_focus()
+            except Exception:
+                pass
             filename_edit.set_edit_text(str(save_path))
-            time.sleep(0.3)
+            time.sleep(0.25)
 
             try:
-                save_btn.click()
+                cur_val = filename_edit.get_value() if hasattr(filename_edit, "get_value") else filename_edit.window_text()
             except Exception:
-                save_btn.invoke()
+                cur_val = ""
+            if str(save_path) not in (cur_val or ""):
+                try:
+                    filename_edit.type_keys("^a{BACKSPACE}" + str(save_path), with_spaces=True, set_foreground=False)
+                    time.sleep(0.2)
+                except Exception:
+                    pass
+
+            _trigger_save(save_btn)
         except PermissionError:
             raise
         except Exception as exc:
@@ -550,33 +610,61 @@ class HistoryPage(MainPage):
                 ) from exc
             raise
 
-        # 저장 다이얼로그 닫힘 대기 (덮어쓰기 확인 창 동시 감시)
-        close_deadline = time.time() + timeout
+        # 저장 다이얼로그 닫힘 대기 (덮어쓰기 확인 창 동시 감시 및 미반응 시 1회 재시도)
+        close_start = time.time()
+        close_deadline = close_start + timeout
         handled_overwrite = False
+        retried_submit = False
+
         while time.time() < close_deadline:
             if not win32gui.IsWindow(dlg_hwnd) or not win32gui.IsWindowVisible(dlg_hwnd):
                 return {
                     "default_filename": default_filename,
                     "saved_path": save_path,
                 }
-            if not handled_overwrite:
-                overwrite_hwnd = 0
 
-                def _ow_cb(h, _):
-                    nonlocal overwrite_hwnd
-                    if h != dlg_hwnd and win32gui.IsWindowVisible(h) and win32gui.GetClassName(h) == "#32770":
-                        if "확인" in (win32gui.GetWindowText(h) or ""):
-                            overwrite_hwnd = h
+            other_dialogs: List[int] = []
 
-                win32gui.EnumWindows(_ow_cb, None)
-                if overwrite_hwnd:
-                    ow_app = Application(backend="uia").connect(handle=overwrite_hwnd)
-                    ow_win = ow_app.window(handle=overwrite_hwnd)
-                    for bt in ow_win.descendants(control_type="Button"):
-                        if (bt.element_info.name or "").strip() in ("예(Y)", "예", "Yes"):
-                            bt.invoke()
-                            handled_overwrite = True
+            def _ow_cb(h, _):
+                if h != dlg_hwnd and win32gui.IsWindowVisible(h) and win32gui.GetClassName(h) == "#32770":
+                    other_dialogs.append(h)
+
+            win32gui.EnumWindows(_ow_cb, None)
+
+            if not handled_overwrite and other_dialogs:
+                for ow_hwnd in other_dialogs:
+                    ow_title = win32gui.GetWindowText(ow_hwnd) or ""
+                    if "확인" in ow_title or "Confirm" in ow_title:
+                        try:
+                            ow_app = Application(backend="uia").connect(handle=ow_hwnd)
+                            ow_win = ow_app.window(handle=ow_hwnd)
+                            for bt in ow_win.descendants(control_type="Button"):
+                                bt_label = (bt.element_info.name or "").strip().replace("&", "")
+                                if bt_label in ("예(Y)", "예", "Yes(Y)", "Yes"):
+                                    bt.invoke()
+                                    handled_overwrite = True
+                                    break
+                        except Exception:
+                            pass
+                        if handled_overwrite:
                             break
+
+            if not retried_submit and not other_dialogs and (time.time() - close_start) >= 2.0:
+                retried_submit = True
+                print(">>> [HistoryPage] 저장 다이얼로그가 아직 열려 있어 저장 확정 재시도...")
+                bring_window_to_front(dlg_hwnd)
+                time.sleep(0.15)
+                try:
+                    if hasattr(save_btn, "click_input"):
+                        save_btn.click_input()
+                    else:
+                        _trigger_save(save_btn)
+                except Exception:
+                    try:
+                        filename_edit.type_keys("{ENTER}", set_foreground=False)
+                    except Exception:
+                        pass
+
             time.sleep(0.2)
 
         raise TimeoutError("저장 다이얼로그(#32770)가 제한 시간 내에 닫히지 않았습니다.")
