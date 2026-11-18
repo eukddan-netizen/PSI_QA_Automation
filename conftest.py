@@ -35,6 +35,15 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from common.os_utils import StateGuard
+from dashboard.pytest_plugin import configure_dashboard_plugin, register_dashboard_hooks
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    register_dashboard_hooks(parser)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    configure_dashboard_plugin(config)
 
 
 @pytest.fixture(scope="function")
