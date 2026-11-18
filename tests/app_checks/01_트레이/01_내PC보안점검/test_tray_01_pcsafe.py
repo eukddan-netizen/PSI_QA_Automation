@@ -13,9 +13,9 @@ import pytest
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_01
-def test_row09_duplicate_launch_prevention(app_ctrl):
+def test_010_트레이_중복실행_방지(app_ctrl):
     """
-    [Row 9: 1_0001]
+    [APP-01-01-010] 보안점검 실행 중 트레이 중복 실행 방지 검증
     - 조건: 보안점검 실행 중
     - 액션: 트레이 아이콘 > 내PC보안점검 재실행 시도
     - 기대 결과: 무반응 (중복 창이 생성되지 않고 기존 창 1개만 유지됨)
@@ -33,9 +33,9 @@ def test_row09_duplicate_launch_prevention(app_ctrl):
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_01
-def test_row10_hr_ui_off_launch(admin_page, app_ctrl):
+def test_020_인사UI_OFF_창노출(admin_page, app_ctrl):
     """
-    [Row 10: 1_0002]
+    [APP-01-01-020] 인사 UI 출력 OFF 상태에서 내PC보안점검 창 정상 노출 검증
     - 조건: 웹 관리자(/pcsafe)에서 현재 PC IP 사용자의 '인사 UI 출력'이 OFF인 상태
     - 액션: 트레이 아이콘 > 내PC보안점검 클릭
     - 기대 결과: 프로그램 창 정상 노출 확인
@@ -51,9 +51,9 @@ def test_row10_hr_ui_off_launch(admin_page, app_ctrl):
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_01
-def test_row11_hr_ui_on_launch(admin_page, app_ctrl):
+def test_030_인사UI_ON_인사연동노출(admin_page, app_ctrl):
     """
-    [Row 11: 1_0003]
+    [APP-01-01-030] 인사 UI 출력 ON 상태에서 메인 화면 및 인사 연동 다이얼로그 노출 검증
     - 조건: 웹 관리자(/pcsafe)에서 현재 PC IP 사용자의 '인사 UI 출력'이 ON인 상태
     - 액션: 트레이 아이콘 > 내PC보안점검 클릭
     - 기대 결과: 보안점검 메인 화면 및 인사 연동 다이얼로그(TA 공지) 노출 확인

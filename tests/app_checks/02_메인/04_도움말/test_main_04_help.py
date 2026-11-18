@@ -66,9 +66,9 @@ def help_session():
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_04
-def test_row27_help_modal_open_state(help_session):
+def test_010_도움말_모달_초기출력(help_session):
     """
-    [Row 27 - 1단계] 도움말 안내 클릭 시 소개 웹뷰 모달 정상 출력 검증
+    [APP-02-04-010] 도움말 안내 클릭 시 소개 웹뷰 모달 및 53개 항목 로드 검증
     - 별도 웹뷰 팝업 창(타이틀: 내PC보안점검) 정상 노출 확인
     - 소개 화면 기본 헤더 타이틀('내PC보안점검 소개') 및 53개 항목 링크 로드 확인
     """
@@ -88,9 +88,9 @@ def test_row27_help_modal_open_state(help_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_04
-def test_row28_help_modal_hamburger_nav_toggle(help_session):
+def test_020_도움말_햄버거메뉴_토글(help_session):
     """
-    [Row 28] 햄버거 메뉴 토글(nav_bar 열림/닫힘) 검증
+    [APP-02-04-020] 도움말 햄버거 메뉴 클릭 시 좌측 네비게이션 바 접힘/펼침 검증
     1. 초기 좌측 네비바 펼침 상태 확인
     2. 좌상단 햄버거 아이콘(☰) 클릭 -> 네비바 접힘(번호 축소, 폭 축소) 확인
     3. 햄버거 아이콘(☰) 재클릭 -> 네비바 정상 펼침 복구 확인
@@ -124,9 +124,9 @@ def test_row28_help_modal_hamburger_nav_toggle(help_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_04
-def test_row29_help_modal_language_switching(help_session):
+def test_030_도움말_다국어_전환(help_session):
     """
-    [Row 29] 다국어(영어/한국어) 변경 시 UI 타이틀 및 항목 번역 실시간 반영 검증
+    [APP-02-04-030] 도움말 다국어(영어/한국어) 전환 시 UI 실시간 번역 검증
     1. 우측 상단 언어 ComboBox에서 'English' 선택
     2. 상단 네비게이션 소개 텍스트 및 항목들이 영문으로 전환되었는지 확인
     3. 다시 '한국어'로 변경 시 한글로 정상 복구되는지 확인
@@ -179,9 +179,9 @@ def test_row29_help_modal_language_switching(help_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_04
-def test_row30_help_modal_accordion_dropdown_toggle(help_session):
+def test_040_도움말_항목_아코디언_토글(help_session):
     """
-    [Row 30] 항목 클릭 시 노출되는 드롭다운(아코디언) 정상동작 검증
+    [APP-02-04-040] 도움말 점검 항목 상세 드롭다운(아코디언) 토글 동작 검증
     1. 1번 항목('바이러스 백신 설치 및 실행 여부 점검') 선택
     2. 첫 번째 아코디언 버튼('🛡️ 점검 내용 ▲') 클릭 -> '▼'(접힘)으로 변경 확인
     3. 다시 해당 버튼 클릭 -> '▲'(펼침)으로 정상 복구되는지 확인
@@ -226,9 +226,9 @@ def test_row30_help_modal_accordion_dropdown_toggle(help_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_04
-def test_row31_verify_all_53_items_integrity(help_session):
+def test_050_도움말_53개항목_전수무결성(help_session):
     """
-    [Row 31] 총 53개 항목 전수 순회 및 오탈자/이상 유무 검증
+    [APP-02-04-050] 도움말 53개 전체 항목 순회 및 텍스트 오탈자/누락 무결성 검증
     (최초 분석 기준 스냅샷 HELP_ITEMS_53_KO을 기준으로 비교 검증, 이미지는 제외)
     1. 1번부터 53번 항목까지 순차적으로 클릭하여 우측 콘텐츠 로드
     2. 우측 상단 헤더 타이틀이 기준 항목명과 일치하는지 확인
@@ -291,9 +291,9 @@ def test_row31_verify_all_53_items_integrity(help_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_04
-def test_row27_help_modal_close(help_session):
+def test_060_도움말_모달_닫기(help_session):
     """
-    [Row 27 - 최종 닫기 단계] 모든 검증 후 도움말 모달 우상단 닫기(X) 검증
+    [APP-02-04-060] 도움말 모달 우상단 닫기(X) 정상 종료 검증
     - 우상단 닫기(X) 버튼 클릭 시 도움말 창이 정상 종료되는지 검증
     """
     modal: HelpModalPage = help_session["modal"]

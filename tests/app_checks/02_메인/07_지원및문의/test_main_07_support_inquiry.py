@@ -23,9 +23,9 @@ DEFAULT_CONTACT_NAME = "전산팀"
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_07
-def test_main_support_inquiry_text_sync(manage_config_page, app_ctrl):
+def test_010_지원및문의_환경설정_문구연동(manage_config_page, app_ctrl):
     """
-    [환경설정 > 보안점검 문의처 연동 검증]
+    [APP-02-07-010] 관리자 환경설정 보안점검 문의처 변경 시 메인 하단 문구 연동 검증
     1. https://192.168.4.151 접속 및 로그인 후 /manageConfig 보안점검 탭 이동
     2. '문의처' input에 'QA팀' 기입 후 하단 저장 클릭 및 모달 확인
     3. 보안점검 클라이언트 재실행

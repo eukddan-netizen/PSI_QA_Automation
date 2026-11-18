@@ -79,9 +79,9 @@ SECURITY_INDEX_CATEGORIES = {
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_02
-def test_row24_security_index_hover_tooltips(app_ctrl):
+def test_010_PC보안지표_차트_툴팁_정합성(app_ctrl):
     """
-    [Row 24] PC보안지표 레이더 차트 꼭짓점 hover 툴팁 점수 표출 및 점검결과 정합성 검증
+    [APP-02-02-010] PC보안지표 레이더 차트 호버 툴팁 점수 및 점검결과 정합성 검증
     1. 보안점검 앱 실행
     2. 점검결과 탭으로 이동하여 5개 분야(21개 항목)의 안전/취약 상태 수집
     3. 분야별 계산 점수(안전 항목수 / 전체 항목수 * 100) 산출

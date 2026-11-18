@@ -68,9 +68,9 @@ def user_form():
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_03
-def test_row12_user_info_form_entry(user_form):
+def test_010_사용자정보입력_웹뷰_진입(user_form):
     """
-    [TC: 3_0001]
+    [APP-01-03-010] 트레이 사용자 정보 입력 웹뷰 화면 정상 출력 검증
     - 조건: 웹뷰 진입 (인사 UI 출력 정책 적용 상태)
     - 액션: 트레이 아이콘 > 사용자 정보 입력
     - 기대 결과: 사용자 입력 웹뷰 화면 정상 출력 확인
@@ -81,9 +81,9 @@ def test_row12_user_info_form_entry(user_form):
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_03
-def test_row13_user_info_required_fields_validation(user_form, valid_user_info):
+def test_020_사용자정보입력_필수값_미입력_알림(user_form, valid_user_info):
     """
-    [TC: 3_0002]
+    [APP-01-03-020] 사용자 정보 필수 값(사번·이름) 미입력 시 경고 팝업 검증
     - 조건: 필수 값 미입력
     - 액션: 1. 둘 다 미입력 / 2. 이름 미입력 / 3. 사번 미입력 후 저장
     - 기대 결과: '사번 or 이름을 입력하세요.' alert 팝업 확인
@@ -115,9 +115,9 @@ def test_row13_user_info_required_fields_validation(user_form, valid_user_info):
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_03
-def test_row14_user_info_invalid_data_validation(user_form):
+def test_030_사용자정보입력_미등록정보_오류알림(user_form):
     """
-    [TC: 3_0003]
+    [APP-01-03-030] 미등록 인사 정보 입력 후 저장 시 불일치 경고 팝업 검증
     - 조건: 잘못된 값 입력
     - 액션: 미등록 인사 정보(9999 / 홍길동) 입력 후 저장
     - 기대 결과: '등록된 인사 정보와 일치하지 않습니다' alert 팝업 확인
@@ -135,9 +135,9 @@ def test_row14_user_info_invalid_data_validation(user_form):
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_03
-def test_row15_user_info_success_registration(user_form, valid_user_info):
+def test_040_사용자정보입력_정상등록(user_form, valid_user_info):
     """
-    [TC: 3_0004]
+    [APP-01-03-040] 정상 인사 정보 입력 후 저장 시 등록 완료 팝업 검증
     - 조건: 정상 등록
     - 액션: 관리자 웹에서 조회된 정상 인사 정보(사번 / 사용자명) 입력 후 저장
     - 기대 결과: '정상 등록되었습니다' alert 팝업 확인

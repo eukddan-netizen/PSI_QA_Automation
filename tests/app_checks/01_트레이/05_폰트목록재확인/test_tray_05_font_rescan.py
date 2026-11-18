@@ -12,13 +12,13 @@ from core.app_controller import register_delayed_rescan_watcher
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_05
-def test_row17_font_rescan(app_ctrl):
+def test_010_폰트목록_재확인(app_ctrl):
     """
-    [TC: 5_0001]
+    [APP-01-05-010] 트레이 폰트 목록 재확인 실행 및 완료 팝업 검증
     - 조건: 정상 동작
     - 액션: 트레이 아이콘 > 폰트 목록 재확인 클릭
     - 기대 결과: "폰트 목록 재검사를 성공적으로 수행하였습니다." 팝업 출력 확인
-      (1분/60초 경과 후에도 반응이 없으면 PASS 처리)
+    (1분/60초 경과 후에도 반응이 없으면 PASS 처리)
     """
     require_admin(
         "보안 에이전트(taAssistant) 트레이 우클릭 메뉴 제어(Windows UIPI 제약 우회)를 위해 "

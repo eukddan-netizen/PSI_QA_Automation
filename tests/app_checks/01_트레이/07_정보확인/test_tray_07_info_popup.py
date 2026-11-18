@@ -21,16 +21,16 @@ EXPECTED_SERVER_IPS = {
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_07
-def test_row19_info_popup(app_ctrl):
+def test_010_정보확인_팝업_출력(app_ctrl):
     """
-    [TC: 7_0001]
+    [APP-01-07-010] 트레이 정보 확인 클릭 시 제품 정보 팝업 및 관리자 웹 정합성 검증
     - 조건: 정상 동작 (STR, PRS 등 복수 제품 설치 환경 지원)
     - 액션: 트레이 아이콘 > 정보 확인 클릭
     - 기대 결과:
-      1. 각 등록 제품(STR, PRS 등)에 대한 정보 확인 팝업 순차적/동시 출력 감지
-      2. 팝업 내 관리서버 IP 검증 (STR: 58.127.84.36, PRS: 192.168.4.151)
-      3. 팝업 내 사용자 IP 검증 (현재 PC의 ipconfig IPv4와 일치)
-      4. 각 팝업의 [확인] 버튼을 클릭하여 정상 닫기 처리
+    1. 각 등록 제품(STR, PRS 등)에 대한 정보 확인 팝업 순차적/동시 출력 감지
+    2. 팝업 내 관리서버 IP 검증 (STR: 58.127.84.36, PRS: 192.168.4.151)
+    3. 팝업 내 사용자 IP 검증 (현재 PC의 ipconfig IPv4와 일치)
+    4. 각 팝업의 [확인] 버튼을 클릭하여 정상 닫기 처리
     """
     require_admin(
         "보안 에이전트(taAssistant) 트레이 우클릭 메뉴 제어(Windows UIPI 제약 우회)를 위해 "

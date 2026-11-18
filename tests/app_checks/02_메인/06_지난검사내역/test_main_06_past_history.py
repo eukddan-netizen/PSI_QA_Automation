@@ -54,14 +54,14 @@ def history_session():
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_06
-def test_row33_past_history_bar_count_and_hover_scores(history_session):
+def test_010_지난검사내역_막대그래프_호버점수(history_session):
     """
-    [Row 33] 지난 검사내역 막대 그래프 개수(0~6개 가변 대응) 및 호버 시 점수 표출 검증
+    [APP-02-06-010] 지난 검사내역 막대 그래프 개수(0~6개) 및 호버 점수 표출 검증
     1. 메인 화면 우하단 '지난 검사내역' 차트에서 막대 바(bar) 탐색
     2. 점검 이력에 따라 0개 ~ 최대 6개의 점검 내역이 표출되는지 확인
-       - 점검 기록이 없는 PC: 0개 정상 감지
-       - 점검 기록이 1~5회인 PC: N개(1~5) 정상 감지
-       - 점검 기록이 6회 이상인 PC: 최근 6개 정상 감지
+    - 점검 기록이 없는 PC: 0개 정상 감지
+    - 점검 기록이 1~5회인 PC: N개(1~5) 정상 감지
+    - 점검 기록이 6회 이상인 PC: 최근 6개 정상 감지
     3. 각 표출된 막대에 마우스 호버(Hover) 시 점수가 정상적으로 표출되는지 전수 확인
     """
     main_page: MainPage = history_session["main_page"]
@@ -99,17 +99,17 @@ def test_row33_past_history_bar_count_and_hover_scores(history_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_06
-def test_row34_all_six_bars_click_match_history_tab_records(history_session):
+def test_020_지난검사내역_클릭시_이력상세_연동(history_session):
     """
-    [Row 34] 막대 그래프 전체(0~6개 가변 대응) 클릭 시 '점검이력' 상세 이동 및 일시 1:1 역순 매핑 전수 검증
+    [APP-02-06-020] 지난 검사내역 막대 클릭 시 점검이력 상세 이동 및 1:1 매핑 검증
     1. '점검이력' 탭으로 이동하여 최근 점검 내역의 일시/점수 수집
-       - 막대가 0개인 경우: 점검이력 탭에도 레코드가 0건인지 교차 확인
-       - 막대가 N개(1~6개)인 경우:
-         - 점검이력 탭 목록에서 상위 N건의 일시/점수 수집
-         - 메인 화면 복귀 후 N개 막대(0 ~ N-1)를 순차 클릭하여 상세 진입
-         - 일반화 매핑: i번째 막대 -> 점검이력 목록의 [(N - 1) - i]번째 행과 일치
-         - (가장 오른쪽인 마지막 막대 -> 점검이력 목록의 1번째(가장 최신) 일시/점수와 일치)
-         - 각 상세 화면의 점검일시 및 점수가 호버 점수 및 점검이력 목록과 일치하는지 전수 검증
+    - 막대가 0개인 경우: 점검이력 탭에도 레코드가 0건인지 교차 확인
+    - 막대가 N개(1~6개)인 경우:
+    - 점검이력 탭 목록에서 상위 N건의 일시/점수 수집
+    - 메인 화면 복귀 후 N개 막대(0 ~ N-1)를 순차 클릭하여 상세 진입
+    - 일반화 매핑: i번째 막대 -> 점검이력 목록의 [(N - 1) - i]번째 행과 일치
+    - (가장 오른쪽인 마지막 막대 -> 점검이력 목록의 1번째(가장 최신) 일시/점수와 일치)
+    - 각 상세 화면의 점검일시 및 점수가 호버 점수 및 점검이력 목록과 일치하는지 전수 검증
     """
     main_page: MainPage = history_session["main_page"]
     main_page.bring_to_front()

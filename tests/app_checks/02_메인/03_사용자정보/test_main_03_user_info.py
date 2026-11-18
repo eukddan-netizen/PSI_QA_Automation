@@ -18,9 +18,9 @@ from pages.client.main_page import MainPage
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_03
-def test_row25_user_info_matches_server(pcsafe_admin_page, app_ctrl):
+def test_010_메인_사용자정보_서버_정합성(pcsafe_admin_page, app_ctrl):
     """
-    [Row 25] 사용자 정보(OS, 부서, 사용자명, IP)의 클라이언트/서버 정합성 검증
+    [APP-02-03-010] 메인 탭 사용자 정보(OS·부서·이름·IP)의 클라이언트/서버 정합성 검증
     1. ipconfig 기반 현재 로컬 PC IPv4 주소 추출
     2. 관리자 웹(/pcsafe)에서 해당 IP로 검색하여 사용자 정보(부서, 사용자, OS, IP) 수집
     3. 내PC보안점검 메인 화면 진입 후 우측 상단 '사용자 정보' 카드 항목 파싱
@@ -94,9 +94,9 @@ def test_row25_user_info_matches_server(pcsafe_admin_page, app_ctrl):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_03
-def test_row26_last_inspection_time_update_on_tab_navigation(pcsafe_admin_page, app_ctrl):
+def test_020_탭이동시_최근점검일시_자동갱신(pcsafe_admin_page, app_ctrl):
     """
-    [Row 26] 점검 완료 후 탭 이동 시점 기준 최근점검일시 자동 갱신 검증
+    [APP-02-03-020] 점검 완료 후 탭 이동 시점 기준 최근점검일시 자동 갱신 검증
     1. 메인 화면의 초기 '최근점검일시' 기록
     2. '▶ 점검 시작' 클릭하여 점검 진행 및 '점검결과' 탭 자동 이동 대기
     3. 점검이 완료된 후 일정 시간 대기 (시작 시점이 아닌 탭 이동 시점 반영 확인 목적)

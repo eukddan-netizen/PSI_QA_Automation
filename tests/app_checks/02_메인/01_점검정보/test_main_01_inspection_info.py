@@ -47,8 +47,10 @@ def _run_scan_and_return_to_main(app_ctrl, expected_safety_score: int) -> MainPa
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_01
-def test_row20_shield_status_no_history(pcsafe_manage_page, app_ctrl):
-    """[Row 20] 정책 변경(1번=2점, 2번=0점) 후 방패 '대기', 점검 필요 문구 및 서버 안전기준점수 연동 검증"""
+def test_010_방패상태_점검이력없음_대기(pcsafe_manage_page, app_ctrl):
+    """
+    [APP-02-01-010] 점검 이력 없을 때 방패 '대기' 상태 및 안전기준점수 연동 검증
+    """
     pcsafe_manage_page.goto_pcsafe_manage()
     pcsafe_manage_page.select_policy(POLICY_NAME)
 
@@ -95,8 +97,10 @@ def test_row20_shield_status_no_history(pcsafe_manage_page, app_ctrl):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_01
-def test_row21_shield_status_good(pcsafe_manage_page, app_ctrl):
-    """[Row 21] 안전 기준 점수 10점 설정 및 점검 후 점수 >= 안전기준점수, 방패 '양호' 및 무팝업 종료 검증"""
+def test_020_방패상태_안전점수이상_양호(pcsafe_manage_page, app_ctrl):
+    """
+    [APP-02-01-020] 안전기준점수 이상일 때 방패 '양호' 상태 및 무팝업 종료 검증
+    """
     target_safety = 10
     pcsafe_manage_page.goto_pcsafe_manage()
     pcsafe_manage_page.select_policy(POLICY_NAME)
@@ -134,8 +138,10 @@ def test_row21_shield_status_good(pcsafe_manage_page, app_ctrl):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_01
-def test_row22_shield_status_vulnerable_and_close_warning(pcsafe_manage_page, app_ctrl):
-    """[Row 22] 안전 기준 점수 100점 설정 및 점검 후 점수 < 안전기준점수, 방패 '위험' 및 X 닫기 경고 팝업 검증"""
+def test_030_방패상태_안전점수미만_위험_종료경고(pcsafe_manage_page, app_ctrl):
+    """
+    [APP-02-01-030] 안전기준점수 미만일 때 방패 '위험' 상태 및 닫기 경고 팝업 검증
+    """
     target_safety = 100
     pcsafe_manage_page.goto_pcsafe_manage()
     pcsafe_manage_page.select_policy(POLICY_NAME)
@@ -186,8 +192,10 @@ def test_row22_shield_status_vulnerable_and_close_warning(pcsafe_manage_page, ap
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_01
-def test_row23_start_inspection_button(app_ctrl):
-    """[Row 23] '점검 시작' 버튼 클릭 시 점검 진행 탭 경유 후 '점검결과' 탭으로 이동 검증"""
+def test_040_점검시작_버튼_실행_및_결과탭_이동(app_ctrl):
+    """
+    [APP-02-01-040] 메인 '점검 시작' 버튼 클릭 후 점검 진행 및 결과 탭 이동 검증
+    """
     app_ctrl.launch(timeout=15)
     assert app_ctrl.hwnd, "내PC보안점검 메인 창 실행 실패"
 

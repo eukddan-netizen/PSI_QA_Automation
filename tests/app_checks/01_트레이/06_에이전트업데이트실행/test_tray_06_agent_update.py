@@ -13,15 +13,15 @@ from common.os_utils import require_admin
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_06
-def test_row18_agent_update(admin_page, app_ctrl):
+def test_010_에이전트_업데이트_실행(admin_page, app_ctrl):
     """
-    [TC: 6_0001]
+    [APP-01-06-010] 트레이 에이전트 업데이트 실행 및 관리자 웹 갱신일 반영 검증
     - 조건: 정상 동작
     - 액션: 트레이 아이콘 > 에이전트 업데이트 실행 클릭
     - 기대 결과:
-      1. 오류 팝업 없이 정상 동작(무반응)
-      2. 관리자 웹(https://192.168.4.151/pcsafe)에서 현재 PC 사용자 검색 후 사용자 모달 진입 시
-         '갱신일'이 에이전트 업데이트 실행 시점 혹은 이후 시간으로 설정됨
+    1. 오류 팝업 없이 정상 동작(무반응)
+    2. 관리자 웹(https://192.168.4.151/pcsafe)에서 현재 PC 사용자 검색 후 사용자 모달 진입 시
+    '갱신일'이 에이전트 업데이트 실행 시점 혹은 이후 시간으로 설정됨
     """
     require_admin(
         "보안 에이전트(taAssistant) 트레이 우클릭 메뉴 제어(Windows UIPI 제약 우회)를 위해 "

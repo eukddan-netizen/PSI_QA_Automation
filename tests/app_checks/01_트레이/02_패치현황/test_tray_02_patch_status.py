@@ -62,14 +62,14 @@ def _assert_rate_consistent(label: str, total: int, installed: int, rate_value: 
 @pytest.mark.app_check
 @pytest.mark.app_tray
 @pytest.mark.tray_02
-def test_patch_status_matches_admin_web(patch_admin_page, app_ctrl):
+def test_010_패치현황_서버_정합성_검증(patch_admin_page, app_ctrl):
     """
-    [TC: 2_0001]
+    [APP-01-02-010] 트레이 패치 현황과 관리자 웹(/patch) 권고·설치 패치 정합성 검증
     - 조건: 정상 동작
     - 액션:
-      1. 트레이 아이콘 우클릭 > '패치 현황' 클릭 및 권고패치 현황/설치 패치 목록 수집
-      2. https://192.168.4.151/patch에서 ipconfig 기반 현재 PC IP 검색 및 '권고' 개수 클릭
-      3. 상세 테이블 및 각 패치 정보 모달의 '발표일' 수집 후 트레이 결과와 비교 검증
+    1. 트레이 아이콘 우클릭 > '패치 현황' 클릭 및 권고패치 현황/설치 패치 목록 수집
+    2. https://192.168.4.151/patch에서 ipconfig 기반 현재 PC IP 검색 및 '권고' 개수 클릭
+    3. 상세 테이블 및 각 패치 정보 모달의 '발표일' 수집 후 트레이 결과와 비교 검증
     - 기대 결과: 권고패치 현황(종류별 전체/설치/패치율, 총계) 및 설치 패치 목록(종류, 이름, 발표일) 100% 일치
     """
     require_admin(

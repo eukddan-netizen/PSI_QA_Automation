@@ -68,9 +68,9 @@ def pwd_session():
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_05
-def test_step1_password_modal_open_and_spelling(pwd_session):
+def test_010_암호안전성검사_모달_초기UI(pwd_session):
     """
-    [Step 1] 암호 안전성 검사 모달 출력 및 오탈자/기본 UI 검증
+    [APP-02-05-010] 암호 안전성 검사 모달 출력 및 오탈자/기본 UI 요소 검증
     1. 모달 타이틀('암호 안전성 검사') 확인
     2. 인풋 placeholder('테스트할 암호를 입력해주세요.') 확인
     3. 5가지 기준 텍스트('9자 이상', '대문자 포함', '소문자 포함', '숫자 포함', '특수문자 포함') 오탈자 없음 확인
@@ -110,9 +110,9 @@ def test_step1_password_modal_open_and_spelling(pwd_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_05
-def test_step2_password_visibility_toggle(pwd_session):
+def test_020_암호_표시숨김_토글(pwd_session):
     """
-    [Step 2] 눈 아이콘 클릭 시 비밀번호 원문 보임/숨김 토글 검증
+    [APP-02-05-020] 눈 아이콘 클릭 시 비밀번호 원문 표시/숨김 토글 검증
     1. 텍스트 입력 후 초기 상태(마스킹됨, Show password) 확인
     2. 눈 아이콘 클릭 -> 비밀번호 보이는 상태(Hide password)로 전환 확인
     3. 눈 아이콘 재클릭 -> 비밀번호 숨김 상태(Show password)로 원복 확인
@@ -140,9 +140,9 @@ def test_step2_password_visibility_toggle(pwd_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_05
-def test_step3_korean_input_warning_message(pwd_session):
+def test_030_한글입력시_경고문구_노출(pwd_session):
     """
-    [Step 3] 비밀번호가 보이는 상태에서 한글 입력 시 경고 문구 검증
+    [APP-02-05-030] 비밀번호 표시 상태에서 한글 입력 시 제한 문자 경고 문구 검증
     1. 비밀번호가 보이는 상태(Hide password)로 설정
     2. 한글('테스트한글') 입력
     3. 인풋창 아래에 '입력할 수 없는 문자가 포함되어 있습니다.' 빨간색 경고 문구 출력 확인
@@ -189,16 +189,16 @@ def test_step3_korean_input_warning_message(pwd_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_05
-def test_step4_five_criteria_and_gauge_bar_progression(pwd_session):
+def test_040_5가지기준_충족_게이지바_변화(pwd_session):
     """
-    [Step 4] 5가지 기준 순차 충족 및 게이지 바 / 등급 실시간 변화 전수 검증
+    [APP-02-05-040] 5가지 암호 기준 순차 충족에 따른 게이지 바 및 등급 변화 검증
     - 5개 조건: 9자 이상, 대문자 포함, 소문자 포함, 숫자 포함, 특수문자 포함
     - 각각 충족 시마다:
-      1) 해당 항목의 ✕ 표시가 ✓(초록색)로 변경
-      2) 게이지 바가 약 20% -> 40% -> 60% -> 80% -> 100%로 순차 증가
-      3) 1~3개 충족(9자 미만) 시 주황색 바 및 '약함' 유지
-      4) 최소 조건(9자 이상 + 세 가지 이상의 문자 조합) 충족 시 초록색 바 및 '보통' 출력
-      5) 5가지 항목 전부 충족 시 초록색 바 및 '강함' 출력
+    1) 해당 항목의 ✕ 표시가 ✓(초록색)로 변경
+    2) 게이지 바가 약 20% -> 40% -> 60% -> 80% -> 100%로 순차 증가
+    3) 1~3개 충족(9자 미만) 시 주황색 바 및 '약함' 유지
+    4) 최소 조건(9자 이상 + 세 가지 이상의 문자 조합) 충족 시 초록색 바 및 '보통' 출력
+    5) 5가지 항목 전부 충족 시 초록색 바 및 '강함' 출력
     """
     modal: PasswordSafetyModalPage = pwd_session["modal"]
     print("\n>>> [Step 4] 5단계 기준 순차 충족 및 게이지 바 / 등급 전수 검증 시작")
@@ -323,9 +323,9 @@ def test_step4_five_criteria_and_gauge_bar_progression(pwd_session):
 @pytest.mark.app_check
 @pytest.mark.app_main
 @pytest.mark.main_05
-def test_step5_password_modal_close(pwd_session):
+def test_050_암호안전성검사_모달_닫기(pwd_session):
     """
-    [Step 5] '닫기' 버튼 클릭 시 모달 창 정상 종료 검증
+    [APP-02-05-050] 암호 안전성 검사 모달 '닫기' 버튼 정상 종료 검증
     """
     modal: PasswordSafetyModalPage = pwd_session["modal"]
     print("\n>>> [Step 5] '닫기' 버튼 클릭하여 모달 종료 검증")

@@ -17,8 +17,10 @@ from pages.client.main_page import MainPage
 
 @pytest.mark.app_check
 @pytest.mark.app_inspection
-def test_inspection_tab_user_info_matches_main(app_ctrl):
-    """[TC 14_0001] 점검 탭 사용자 정보(OS/부서/사용자명/IP/최근점검일시)와 메인 탭 데이터 일치 검증"""
+def test_010_점검탭_사용자정보_메인일치(app_ctrl):
+    """
+    [APP-03-00-010] 점검 탭 사용자 정보(OS·부서·이름·IP·최근점검일시)와 메인 탭 일치 검증
+    """
     app_ctrl.launch(timeout=15)
     assert app_ctrl.hwnd, "내PC보안점검 메인 창 실행 실패"
 
@@ -51,8 +53,10 @@ def test_inspection_tab_user_info_matches_main(app_ctrl):
 
 @pytest.mark.app_check
 @pytest.mark.app_inspection
-def test_inspection_start_realtime_and_auto_navigation(app_ctrl):
-    """[TC 13_0001 ~ 13_0002] 점검 탭 '▶ 점검 시작' 클릭 후 실시간 진행 반영 및 '점검결과' 탭 자동 이동 검증"""
+def test_020_점검진행_실시간반영_및_결과탭이동(app_ctrl):
+    """
+    [APP-03-00-020] 점검 시작 시 실시간 진행률 반영 및 점검결과 탭 자동 이동 검증
+    """
     app_ctrl.launch(timeout=15)
     assert app_ctrl.hwnd, "내PC보안점검 메인 창 실행 실패"
 
