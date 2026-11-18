@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Bell,
+  BellOff,
+  BellRing,
   FileSpreadsheet,
   FileText,
   Monitor,
@@ -11,6 +14,7 @@ import {
   StepForward,
   Sun,
 } from 'lucide-react'
+import type { NotificationPermissionState } from '../hooks/useRunNotifications'
 import type { CatalogPreset, RunListItem, RunState, RunnerStatus, StartRunPayload } from '../types/run'
 import { RunHistorySelector } from './RunHistorySelector'
 import { TargetSelector, buildRunPayload } from './TargetSelector'
@@ -22,6 +26,10 @@ interface TopBarProps {
   runner: RunnerStatus
   connected: boolean
   theme: 'dark' | 'light'
+  notificationPermission: NotificationPermissionState
+  notificationsEnabled: boolean
+  onToggleNotifications: () => Promise<void>
+  onEnsureNotificationPermission: () => Promise<void>
   onToggleTheme: () => void
   onSelectRun: (runId: string) => void
   onStartRun: (payload: StartRunPayload) => Promise<void>
@@ -38,6 +46,10 @@ export function TopBar({
   runner,
   connected,
   theme,
+  notificationPermission,
+  notificationsEnabled,
+  onToggleNotifications,
+  onEnsureNotificationPermission,
   onToggleTheme,
   onSelectRun,
   onStartRun,
@@ -79,6 +91,7 @@ export function TopBar({
 
   const handleLaunch = async () => {
     if (!runPayload || launching || resuming) return
+    void onEnsureNotificationPermission()
     setLaunching(true)
     try {
       await onStartRun(runPayload)
@@ -89,6 +102,7 @@ export function TopBar({
 
   const handleResume = async () => {
     if (!run || !canResume || resuming || launching) return
+    void onEnsureNotificationPermission()
     setResuming(true)
     try {
       await onResumeRun(run.run_id)
@@ -96,6 +110,15 @@ export function TopBar({
       setResuming(false)
     }
   }
+
+  const notificationTitle =
+    notificationPermission === 'unsupported'
+      ? '이 브라우저는 데스크톱 알림을 지원하지 않습니다'
+      : notificationPermission === 'denied'
+        ? '브라우저 알림 권한이 차단되어 있습니다 (주소창 좌측 사이트 설정에서 허용해 주세요)'
+        : notificationsEnabled
+          ? '완료/오류 브라우저 알림 켜짐 (클릭하여 끄기)'
+          : '완료/오류 브라우저 알림 꺼짐 (클릭하여 켜기)'
 
   const handleDownload = (format: 'xlsx' | 'docx') => {
     if (!run) return
@@ -288,6 +311,38 @@ export function TopBar({
             <span>Word</span>
           </button>
         </div>
+
+        {/* Browser Notification Toggle */}
+        <button
+          type="button"
+          onClick={() => void onToggleNotifications()}
+          disabled={notificationPermission === 'unsupported' || notificationPermission === 'denied'}
+          title={notificationTitle}
+          aria-label="브라우저 알림 토글"
+          className="relative flex h-8 w-8 items-center justify-center rounded border transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45 cursor-pointer"
+          style={{
+            backgroundColor: notificationsEnabled
+              ? 'rgba(16, 185, 129, 0.14)'
+              : 'var(--bg-header-control)',
+            borderColor: notificationsEnabled
+              ? 'rgba(52, 211, 153, 0.45)'
+              : 'var(--border-header)',
+            color:
+              notificationPermission === 'denied'
+                ? '#f87171'
+                : notificationsEnabled
+                  ? '#34d399'
+                  : 'var(--text-header-muted)',
+          }}
+        >
+          {notificationPermission === 'unsupported' || notificationPermission === 'denied' ? (
+            <BellOff className="h-3.5 w-3.5" />
+          ) : notificationsEnabled ? (
+            <BellRing className="h-3.5 w-3.5" />
+          ) : (
+            <Bell className="h-3.5 w-3.5" />
+          )}
+        </button>
 
         {/* Theme Toggle */}
         <button

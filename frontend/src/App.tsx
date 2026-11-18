@@ -5,6 +5,7 @@ import { SummaryStrip } from './components/SummaryStrip'
 import { TestTreePanel } from './components/TestTreePanel'
 import { TopBar } from './components/TopBar'
 import { useAutoFocus } from './hooks/useAutoFocus'
+import { useRunNotifications } from './hooks/useRunNotifications'
 import { useRunStream } from './hooks/useRunStream'
 import { buildHierarchyTree } from './types/run'
 
@@ -39,6 +40,13 @@ export function App() {
     deleteRuns,
   } = useRunStream()
 
+  const {
+    permission: notificationPermission,
+    enabled: notificationsEnabled,
+    toggleNotifications,
+    ensurePermission: ensureNotificationPermission,
+  } = useRunNotifications(run, runBatchSeq)
+
   const domains = useMemo(() => buildHierarchyTree(run?.cases ?? []), [run?.cases])
   const flatCategories = useMemo(() => domains.flatMap((d) => d.categories), [domains])
 
@@ -64,6 +72,10 @@ export function App() {
         runner={runner}
         connected={connected}
         theme={theme}
+        notificationPermission={notificationPermission}
+        notificationsEnabled={notificationsEnabled}
+        onToggleNotifications={toggleNotifications}
+        onEnsureNotificationPermission={ensureNotificationPermission}
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         onSelectRun={selectRun}
         onStartRun={startPresetRun}
