@@ -74,11 +74,6 @@ function getInitialPref(): 'true' | 'false' | null {
   return null
 }
 
-function isWindowUnfocused(): boolean {
-  if (typeof document === 'undefined') return false
-  return document.hidden || !document.hasFocus()
-}
-
 export interface UseRunNotificationsResult {
   permission: NotificationPermissionState
   enabled: boolean
@@ -88,20 +83,30 @@ export interface UseRunNotificationsResult {
 
 export function useRunNotifications(
   run: RunState | null,
-  runBatchSeq: number,
+  _runBatchSeq = 0,
 ): UseRunNotificationsResult {
   const [permission, setPermission] = useState<NotificationPermissionState>(getInitialPermission)
   const [enabledPref, setEnabledPref] = useState<'true' | 'false' | null>(getInitialPref)
 
   const lastFaviconToneRef = useRef<FaviconTone | null>(null)
+  const activeNotificationRef = useRef<Notification | null>(null)
   const prevStateRef = useRef<{
     runId: string
     status: RunStatus
-    batchSeq: number
-    alertedFailure: boolean
   } | null>(null)
 
   const enabled = permission === 'granted' && enabledPref !== 'false'
+
+  const closeActiveNotification = useCallback(() => {
+    const active = activeNotificationRef.current
+    if (!active) return
+    activeNotificationRef.current = null
+    try {
+      active.close()
+    } catch {
+      // ignore
+    }
+  }, [])
 
   // Sync permission if user changes browser site settings while tab is open
   useEffect(() => {
@@ -118,6 +123,7 @@ export function useRunNotifications(
   const sendNotification = useCallback(
     (title: string, body: string, tag: string, tone: FaviconTone, renotify = false) => {
       if (permission !== 'granted' || enabledPref === 'false') return
+      closeActiveNotification()
       try {
         const notification = new Notification(title, {
           body,
@@ -125,15 +131,21 @@ export function useRunNotifications(
           icon: buildFaviconDataUrl(tone),
           renotify,
         } as NotificationOptions)
+        activeNotificationRef.current = notification
         notification.onclick = () => {
           window.focus()
           notification.close()
+        }
+        notification.onclose = () => {
+          if (activeNotificationRef.current === notification) {
+            activeNotificationRef.current = null
+          }
         }
       } catch {
         // Ignore environments where Notification constructor is restricted
       }
     },
-    [enabledPref, permission],
+    [closeActiveNotification, enabledPref, permission],
   )
 
   const toggleNotifications = useCallback(async () => {
@@ -146,15 +158,22 @@ export function useRunNotifications(
         if (result === 'granted') {
           localStorage.setItem(STORAGE_KEY, 'true')
           setEnabledPref('true')
+          closeActiveNotification()
           try {
             const n = new Notification('PSI QA Monitor 알림 활성화', {
               body: '테스트 완료 또는 오류 발생 시 브라우저 알림을 표시합니다.',
               tag: 'psi-qa-notify-enabled',
               icon: buildFaviconDataUrl('passed'),
             })
+            activeNotificationRef.current = n
             n.onclick = () => {
               window.focus()
               n.close()
+            }
+            n.onclose = () => {
+              if (activeNotificationRef.current === n) {
+                activeNotificationRef.current = null
+              }
             }
           } catch {
             // ignore
@@ -170,9 +189,12 @@ export function useRunNotifications(
     }
 
     const next: 'true' | 'false' = enabled ? 'false' : 'true'
+    if (next === 'false') {
+      closeActiveNotification()
+    }
     localStorage.setItem(STORAGE_KEY, next)
     setEnabledPref(next)
-  }, [enabled, permission])
+  }, [closeActiveNotification, enabled, permission])
 
   const ensurePermission = useCallback(async () => {
     if (permission !== 'default' || enabledPref === 'false') return
@@ -210,83 +232,63 @@ export function useRunNotifications(
   useEffect(() => {
     return () => {
       document.title = DEFAULT_TITLE
+      closeActiveNotification()
     }
-  }, [])
+  }, [closeActiveNotification])
 
-  // Detect live run transitions and fire browser notifications
+  // Close any lingering toast while tests are running; only notify once a run finishes
   useEffect(() => {
     if (!run) {
       prevStateRef.current = null
       return
     }
 
+    if (run.status === 'running') {
+      closeActiveNotification()
+    }
+
     const prev = prevStateRef.current
     const isSameRun = prev !== null && prev.runId === run.run_id
-    const isNewBatch = isSameRun && prev.batchSeq !== runBatchSeq
-    let alertedFailure = isSameRun && !isNewBatch ? prev.alertedFailure : false
 
-    if (isSameRun) {
-      // Mid-run early failure alert (only once per batch when user is away and more cases remain)
-      if (
-        run.status === 'running' &&
-        !alertedFailure &&
-        run.summary.failed > 0 &&
-        run.summary.pending > 1 &&
-        isWindowUnfocused()
-      ) {
-        alertedFailure = true
+    if (isSameRun && prev.status === 'running' && run.status !== 'running') {
+      const { total, completed, passed, failed, skipped, duration_sec } = run.summary
+      const durationText = formatDuration(duration_sec)
+      const tag = `psi-qa-run-${run.run_id}`
+
+      if (run.status === 'stopped') {
         sendNotification(
-          `⚠️ QA 테스트 오류 감지 (${run.summary.failed}건)`,
-          `${run.title}\n진행 ${run.summary.completed}/${run.summary.total} (나머지 항목 실행 중)`,
-          `psi-qa-run-${run.run_id}`,
-          'running-fail',
-          false,
+          `⏹️ QA 테스트 중단됨 (${completed}/${total})`,
+          `${run.title}\n정상 ${passed} · 오류 ${failed} · 잔여 ${run.summary.pending}`,
+          tag,
+          'stopped',
+          true,
         )
-      }
-
-      // Final transition from running -> completed / failed / stopped
-      if (prev.status === 'running' && run.status !== 'running') {
-        const { total, completed, passed, failed, skipped, duration_sec } = run.summary
-        const durationText = formatDuration(duration_sec)
-        const tag = `psi-qa-run-${run.run_id}`
-
-        if (run.status === 'stopped') {
-          sendNotification(
-            `⏹️ QA 테스트 중단됨 (${completed}/${total})`,
-            `${run.title}\n정상 ${passed} · 오류 ${failed} · 잔여 ${run.summary.pending}`,
-            tag,
-            'stopped',
-            true,
-          )
-        } else if (failed > 0 || run.status === 'failed') {
-          const headline =
-            failed > 0 ? `❌ QA 테스트 오류 (${failed}건 실패)` : '❌ QA 테스트 실패'
-          sendNotification(
-            headline,
-            `${run.title}\n정상 ${passed} · 오류 ${failed} · 제외 ${skipped} (${durationText})`,
-            tag,
-            'failed',
-            true,
-          )
-        } else {
-          sendNotification(
-            `✅ QA 테스트 완료 (${passed}/${total} 정상)`,
-            `${run.title}\n제외 ${skipped} · 소요시간 ${durationText}`,
-            tag,
-            'passed',
-            true,
-          )
-        }
+      } else if (failed > 0 || run.status === 'failed') {
+        const headline =
+          failed > 0 ? `❌ QA 테스트 오류 (${failed}건 실패)` : '❌ QA 테스트 실패'
+        sendNotification(
+          headline,
+          `${run.title}\n정상 ${passed} · 오류 ${failed} · 제외 ${skipped} (${durationText})`,
+          tag,
+          'failed',
+          true,
+        )
+      } else {
+        sendNotification(
+          `✅ QA 테스트 완료 (${passed}/${total} 정상)`,
+          `${run.title}\n제외 ${skipped} · 소요시간 ${durationText}`,
+          tag,
+          'passed',
+          true,
+        )
       }
     }
 
     prevStateRef.current = {
       runId: run.run_id,
       status: run.status,
-      batchSeq: runBatchSeq,
-      alertedFailure,
     }
-  }, [run, runBatchSeq, sendNotification])
+  }, [closeActiveNotification, run, sendNotification])
 
   return {
     permission,
