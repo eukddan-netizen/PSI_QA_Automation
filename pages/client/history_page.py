@@ -425,9 +425,36 @@ class HistoryPage(MainPage):
 
             def _cb(h, _):
                 nonlocal found_hwnd
+                if found_hwnd:
+                    return
                 if win32gui.IsWindowVisible(h) and win32gui.GetClassName(h) == "#32770":
                     title = win32gui.GetWindowText(h) or ""
                     if any(k in title for k in ("저장", "Save")):
+                        found_hwnd = h
+                        return
+
+                    # 앱 커스텀 제목(예: '점검 상세 내역')이 설정된 표준 저장 다이얼로그(#32770) 감지:
+                    # 내부에 파일명 입력 Edit와 저장 버튼(ID=1, '저장(&S)'/'Save')이 모두 존재해야 함
+                    has_save_btn = False
+                    has_edit = False
+
+                    def _child_cb(ch, _):
+                        nonlocal has_save_btn, has_edit
+                        cls = win32gui.GetClassName(ch)
+                        if cls == "Edit":
+                            has_edit = True
+                        elif cls == "Button":
+                            cid = win32gui.GetDlgCtrlID(ch)
+                            txt = (win32gui.GetWindowText(ch) or "").strip().replace("&", "")
+                            if cid == 1 and txt in ("저장(S)", "저장", "Save(S)", "Save"):
+                                has_save_btn = True
+
+                    try:
+                        win32gui.EnumChildWindows(h, _child_cb, None)
+                    except Exception:
+                        pass
+
+                    if has_save_btn and has_edit:
                         found_hwnd = h
 
             win32gui.EnumWindows(_cb, None)

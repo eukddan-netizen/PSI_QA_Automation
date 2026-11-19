@@ -19,12 +19,11 @@ class CleanPage(MainPage):
     ]
 
     BROWSER_ITEMS = [
-        "캐시 및 성능 데이터",
-        "기록 및 탐색 데이터",
-        "저장소 데이터",
-        "세션 및 사용자 설정",
-        "쿠키 및 사용자 인증 데이터",
-        "미디어 데이터",
+        "방문 기록",
+        "다운로드 기록",
+        "쿠키 및 기타 사이트 데이터",
+        "캐시된 이미지 및 파일",
+        "자동 완성 양식 데이터",
     ]
 
     ALL_LEAF_ITEMS = WINDOWS_ITEMS + BROWSER_ITEMS
@@ -201,11 +200,24 @@ class CleanPage(MainPage):
 
         raise TimeoutError(f"'{name}' 체크박스 상태 변경({target_state}) 대기 시간 초과 (현재: {self.get_checkbox_state(name)})")
 
+    def get_visible_checkbox_names(self) -> List[str]:
+        """현재 'PC정리' 탭에 표시된 모든 체크박스 이름 목록 반환"""
+        _, win = self._connect_window()
+        names: List[str] = []
+        for cb in win.descendants(control_type="CheckBox"):
+            name = (cb.element_info.name or "").strip()
+            if name:
+                names.append(name)
+        return names
+
     def uncheck_all(self) -> None:
         """모든 정리 항목 체크박스를 해제 상태로 초기화"""
-        if self.get_checkbox_state("전체") != 0:
+        visible = self.get_visible_checkbox_names()
+        if "전체" in visible and self.get_checkbox_state("전체") != 0:
             self.set_checkbox("전체", False)
-        for item in self.ALL_LEAF_ITEMS:
+        for item in visible:
+            if item in ("전체", "Windows", "웹 브라우저"):
+                continue
             if self.get_checkbox_state(item) != 0:
                 self.set_checkbox(item, False)
 
@@ -223,42 +235,61 @@ class CleanPage(MainPage):
         raise RuntimeError("'PC정리' 탭에서 '정리하기' 버튼을 찾을 수 없습니다.")
 
     def wait_for_confirm_modal(self, timeout: float = 5.0) -> None:
-        """'정리 확인' 모달('정리 진행' / '취소' 버튼) 노출 대기"""
+        """'정리 확인' 모달('정리 진행'/'정리하기' / '취소' 버튼) 노출 대기"""
         deadline = time.time() + timeout
         while time.time() < deadline:
             _, win = self._connect_window()
             texts = {(t.element_info.name or "").strip() for t in win.descendants(control_type="Text")}
             buttons = {(b.element_info.name or "").strip() for b in win.descendants(control_type="Button")}
-            if "정리 확인" in texts and "정리 진행" in buttons:
+            if "정리 확인" in texts and ("정리 진행" in buttons or "정리하기" in buttons):
                 return
             time.sleep(0.2)
         raise TimeoutError("'정리 확인' 모달이 표시되지 않았습니다.")
 
     def confirm_clean(self, timeout: float = 5.0) -> None:
-        """'정리 확인' 모달에서 '정리 진행' 버튼 클릭"""
+        """'정리 확인' 모달에서 확인('정리 진행' 또는 '정리하기') 버튼 클릭"""
         self.wait_for_confirm_modal(timeout=timeout)
         target_h, win = self._connect_window()
-        for b in win.descendants(control_type="Button"):
-            if (b.element_info.name or "").strip() == "정리 진행":
-                try:
-                    b.invoke()
-                except Exception:
-                    self._click_element(b, target_h)
-                time.sleep(0.3)
-                return
-        raise RuntimeError("'정리 확인' 모달에서 '정리 진행' 버튼을 찾을 수 없습니다.")
+        candidates = [
+            b for b in win.descendants(control_type="Button")
+            if (b.element_info.name or "").strip() in ("정리 진행", "정리하기")
+        ]
+        if candidates:
+            # 모달이 열린 상태에서는 모달 내부 버튼(마지막 요소)을 우선 선택
+            btn = candidates[-1]
+            try:
+                btn.invoke()
+            except Exception:
+                self._click_element(btn, target_h)
+            time.sleep(0.3)
+            return
+        raise RuntimeError("'정리 확인' 모달에서 '정리 진행'/'정리하기' 버튼을 찾을 수 없습니다.")
+
+    @staticmethod
+    def _is_complete_modal_visible(win) -> bool:
+        """정리 완료/결과 모달 노출 여부 판별 (구버전 '정리가 완료되었습니다!' + 신버전 '내 PC 정리' 결과 모달 모두 지원)"""
+        texts = [(t.element_info.name or "").strip() for t in win.descendants(control_type="Text") if t.element_info.name]
+        buttons = list(win.descendants(control_type="Button"))
+        has_ok_btn = any((b.element_info.name or "").strip() == "확인" for b in buttons)
+        if not has_ok_btn:
+            return False
+        if "정리가 완료되었습니다!" in texts:
+            return True
+        if any("처리 완료" in t for t in texts):
+            return True
+        if "내 PC 정리" in texts and any("close-button" in (b.element_info.class_name or "") for b in buttons):
+            return True
+        return False
 
     def wait_for_complete_modal(self, timeout: float = 15.0) -> None:
-        """'정리가 완료되었습니다!' 완료 모달 노출 대기"""
+        """정리 완료/결과 모달('정리가 완료되었습니다!' 또는 '내 PC 정리' 결과 모달) 노출 대기"""
         deadline = time.time() + timeout
         while time.time() < deadline:
             _, win = self._connect_window()
-            texts = {(t.element_info.name or "").strip() for t in win.descendants(control_type="Text")}
-            buttons = {(b.element_info.name or "").strip() for b in win.descendants(control_type="Button")}
-            if "정리가 완료되었습니다!" in texts and "확인" in buttons:
+            if self._is_complete_modal_visible(win):
                 return
             time.sleep(0.25)
-        raise TimeoutError("'정리가 완료되었습니다!' 완료 모달이 표시되지 않았습니다.")
+        raise TimeoutError("정리 완료 모달('정리가 완료되었습니다!' / '내 PC 정리')이 표시되지 않았습니다.")
 
     def close_complete_modal(self, timeout: float = 5.0) -> None:
         """완료 모달에서 '확인' 버튼 클릭 및 모달 닫힘 대기"""
@@ -276,8 +307,7 @@ class CleanPage(MainPage):
                         clicked = True
                         break
             else:
-                texts = {(t.element_info.name or "").strip() for t in win.descendants(control_type="Text")}
-                if "정리가 완료되었습니다!" not in texts:
+                if not self._is_complete_modal_visible(win):
                     return
             time.sleep(0.15)
         if not clicked:

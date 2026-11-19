@@ -89,7 +89,9 @@ def test_010_점검이력_엑셀내보내기_정합성(history_test_session, ser
 
             title_val = str(ws.cell(1, 1).value or "").strip()
             excel_version = str(ws.cell(2, 1).value or "").strip()
-            assert "PC보안점검 보고서" in title_val, f"엑셀 1행 보고서 제목 이상: {title_val!r}"
+            assert any(k in title_val for k in ("PC보안점검 보고서", "PC 보안점검 점검 결과")), (
+                f"엑셀 1행 보고서 제목 이상: {title_val!r}"
+            )
             assert excel_version == detail_user["version"] == app_version, (
                 f"엑셀 2행 버전 불일치: 엑셀='{excel_version}', UI상세='{detail_user['version']}', 설정='{app_version}'"
             )
@@ -100,46 +102,50 @@ def test_010_점검이력_엑셀내보내기_정합성(history_test_session, ser
             table_header_row = None
 
             for r in range(3, ws.max_row + 1):
-                c1 = ws.cell(r, 1).value
-                c2 = ws.cell(r, 2).value
-                c3 = ws.cell(r, 3).value
-                c4 = ws.cell(r, 4).value
-                if [str(x).strip() if x is not None else "" for x in (c1, c2, c3, c4)] == [
-                    "번호",
-                    "점검 항목",
-                    "결과",
-                    "상세 설명",
-                ]:
+                c1_cell = ws.cell(r, 1)
+                c2_cell = ws.cell(r, 2)
+                c3_cell = ws.cell(r, 3)
+                c4_cell = ws.cell(r, 4)
+                c1, c2, c3, c4 = c1_cell.value, c2_cell.value, c3_cell.value, c4_cell.value
+                header_row = [str(x).strip() if x is not None else "" for x in (c1, c2, c3, c4)]
+                if header_row in (
+                    ["번호", "점검 항목", "결과", "상세 설명"],
+                    ["번호", "점검 항목", "결과", "결과 상세"],
+                ):
                     table_header_row = r
                     break
                 if c1 is not None:
-                    left_meta[str(c1).strip()] = str(c2).strip() if c2 is not None else ""
+                    left_key = "".join(str(c1).split())
+                    left_meta[left_key] = str(c2).strip() if c2 is not None else ""
                 if c3 is not None:
-                    right_meta[str(c3).strip()] = str(c4).strip() if c4 is not None else ""
+                    right_meta[str(c3).strip()] = (c4, str(c4_cell.number_format or ""))
 
-            assert table_header_row is not None, "엑셀에서 점검 항목 테이블 헤더(['번호', '점검 항목', '결과', '상세 설명'])를 찾지 못했습니다."
+            assert table_header_row is not None, (
+                "엑셀에서 점검 항목 테이블 헤더(['번호', '점검 항목', '결과', '결과 상세'/'상세 설명'])를 찾지 못했습니다."
+            )
 
             print(f">>> [엑셀 사용자정보] {left_meta}")
             print(f">>> [엑셀 요약/점수]  {right_meta}")
 
-            # 4-1. 사용자 정보 검증
+            # 4-1. 사용자 정보 검증 (라벨 공백 차이 허용: '점검일시'/'점검 일시', '바이러스백신'/'바이러스 백신')
             user_checks = [
-                ("점검 일시", detail_user.get("inspection_time")),
-                ("사용자 IP", detail_user.get("ip")),
+                ("점검일시", detail_user.get("inspection_time")),
+                ("사용자IP", detail_user.get("ip")),
                 ("사용자명", detail_user.get("username")),
                 ("부서명", detail_user.get("department")),
-                ("OS 정보", detail_user.get("os")),
-                ("바이러스 백신", detail_user.get("antivirus")),
+                ("OS정보", detail_user.get("os")),
+                ("바이러스백신", detail_user.get("antivirus")),
             ]
             for label, expected_val in user_checks:
                 assert left_meta.get(label) == expected_val, (
                     f"엑셀 '{label}' 불일치: 엑셀={left_meta.get(label)!r} != UI={expected_val!r}"
                 )
-            assert left_meta.get("서버 전송 상태") == "전송 완료", (
-                f"엑셀 '서버 전송 상태'가 '전송 완료'가 아닙니다: {left_meta.get('서버 전송 상태')!r}"
+            assert left_meta.get("서버전송상태") == "전송 완료", (
+                f"엑셀 '서버 전송 상태'가 '전송 완료'가 아닙니다: {left_meta.get('서버전송상태')!r}"
             )
 
             # 4-2. 점검결과 및 점수의 데이터와 단위 표기('개', '점') 검증
+            # (문자열 '53개' 형식과 정수 53 + 엑셀 표시서식 '0"개"' 형식 모두 지원)
             total_count = (
                 detail_summary["safe_count"]
                 + detail_summary["vulnerable_count"]
@@ -147,19 +153,30 @@ def test_010_점검이력_엑셀내보내기_정합성(history_test_session, ser
                 + detail_summary["uninspected_count"]
             )
             expected_summary_cells = {
-                "전체": f"{total_count}개",
-                "미점검": f"{detail_summary['uninspected_count']}개",
-                "점검불가": f"{detail_summary['unable_count']}개",
-                "취약": f"{detail_summary['vulnerable_count']}개",
-                "안전": f"{detail_summary['safe_count']}개",
-                "안전 기준 점수": f"{expected_safety_score}점",
-                "사용자 점수": f"{detail_summary['score']}점",
+                "전체": (total_count, "개"),
+                "미점검": (detail_summary["uninspected_count"], "개"),
+                "점검불가": (detail_summary["unable_count"], "개"),
+                "취약": (detail_summary["vulnerable_count"], "개"),
+                "안전": (detail_summary["safe_count"], "개"),
+                "안전 기준 점수": (expected_safety_score, "점"),
+                "사용자 점수": (detail_summary["score"], "점"),
             }
-            for label, expected_str in expected_summary_cells.items():
-                actual_str = right_meta.get(label)
-                assert actual_str == expected_str, (
-                    f"엑셀 '{label}' 데이터/단위 불일치: 엑셀={actual_str!r} != 기대={expected_str!r}"
-                )
+            for label, (expected_num, unit) in expected_summary_cells.items():
+                assert label in right_meta, f"엑셀 요약 메타데이터에 '{label}' 항목이 없습니다: {list(right_meta.keys())}"
+                raw_val, num_fmt = right_meta[label]
+                if isinstance(raw_val, (int, float)):
+                    assert int(raw_val) == expected_num, (
+                        f"엑셀 '{label}' 값 불일치: 엑셀={raw_val!r} != 기대={expected_num}"
+                    )
+                    assert unit in num_fmt, (
+                        f"엑셀 '{label}' 셀 표시 서식에 단위('{unit}')가 없습니다: number_format={num_fmt!r}"
+                    )
+                else:
+                    actual_str = str(raw_val).strip() if raw_val is not None else ""
+                    expected_str = f"{expected_num}{unit}"
+                    assert actual_str == expected_str, (
+                        f"엑셀 '{label}' 데이터/단위 불일치: 엑셀={actual_str!r} != 기대={expected_str!r}"
+                    )
 
             # 4-3. 각 보안점검 항목(번호, 항목명, 결과, 상세 설명) 전수 검증
             excel_rows = {}

@@ -418,13 +418,37 @@ class InspectionResultPage:
                     for t in win_modal.descendants(control_type="Text")
                     if t.element_info.name
                 ]
-                if "・진단결과" in texts:
-                    idx = texts.index("・진단결과")
+                diag_idx = next(
+                    (i for i, t in enumerate(texts) if t.lstrip("・•·∙ ").strip() == "진단결과"),
+                    None,
+                )
+                if diag_idx is not None:
+                    section_bullets = ("・", "•", "·", "∙")
+                    section_titles = (
+                        "조치방법",
+                        "조치 방법",
+                        "점검기준",
+                        "점검 기준",
+                        "점검내용",
+                        "점검 내용",
+                        "상세설명",
+                        "가이드",
+                        "참고",
+                    )
                     collected = []
-                    for k in range(idx + 1, len(texts)):
-                        if texts[k].startswith("・"):
+                    for k in range(diag_idx + 1, len(texts)):
+                        cur = texts[k]
+                        if cur.startswith("・"):
                             break
-                        collected.append(texts[k])
+                        if cur.startswith(section_bullets):
+                            stripped = cur.lstrip("・•·∙ ").strip()
+                            if any(stripped.startswith(title) for title in section_titles):
+                                break
+                            if not stripped and k + 1 < len(texts):
+                                nxt_stripped = texts[k + 1].strip()
+                                if any(nxt_stripped.startswith(title) for title in section_titles):
+                                    break
+                        collected.append(cur)
                     diag_text = "\n".join(collected).strip()
                     for b in win_modal.descendants(control_type="Button"):
                         if (b.element_info.name or "").strip() in ("확인", "닫기"):
@@ -441,7 +465,7 @@ class InspectionResultPage:
                                         for t in win_chk.descendants(control_type="Text")
                                         if t.element_info.name
                                     ]
-                                    if "・진단결과" not in chk_texts:
+                                    if not any(t.lstrip("・•·∙ ").strip() == "진단결과" for t in chk_texts):
                                         break
                                 except Exception:
                                     pass
