@@ -268,6 +268,7 @@ class RunStore:
         title: str = "QA 자동화 테스트 실행",
         target: str = "custom",
         environment: EnvironmentInfo | None = None,
+        reset_nodeids: list[str] | None = None,
     ) -> RunState:
         """Reopens an existing run for cumulative execution without clearing prior results."""
         with self._lock:
@@ -280,17 +281,30 @@ class RunStore:
                     environment=environment,
                 )
 
+            reset_set = set(reset_nodeids or [])
+            existing_nodeids = {c.nodeid for c in existing.cases}
+            is_rerun_only = bool(reset_set) and reset_set.issubset(existing_nodeids)
+
             existing.status = "running"
             existing.finished_at = None
             existing.active_nodeid = None
-            existing.title = _merge_cumulative_title(existing.title, title)
+            if not is_rerun_only:
+                existing.title = _merge_cumulative_title(existing.title, title)
             if target and target not in existing.target.split(","):
                 existing.target = f"{existing.target},{target}" if existing.target else target
             if environment and environment.hostname:
                 existing.environment = environment
 
             for c in existing.cases:
-                if c.status == "running":
+                if c.nodeid in reset_set:
+                    c.status = "pending"
+                    c.duration = None
+                    c.started_at = None
+                    c.finished_at = None
+                    c.summary = ""
+                    c.error_message = ""
+                    c.logs = []
+                elif c.status == "running":
                     c.status = "pending"
 
             seq = self._log_seq.get(run_id, 0) + 1
@@ -300,12 +314,63 @@ class RunStore:
                 timestamp=now_iso(),
                 stream="system",
                 level="step",
-                stage="누적 실행",
-                text=f"[추가 실행 시작] {title}",
+                stage="개별 재실행" if is_rerun_only else "누적 실행",
+                text=f"[{'개별 재실행 시작' if is_rerun_only else '추가 실행 시작'}] {title}",
                 nodeid=None,
             )
             existing.session_logs.append(append_log)
             self._append_log_jsonl(run_id, append_log)
+
+            self._latest_run_id = run_id
+            self._recompute_summary_unlocked(existing)
+            self._persist_run_unlocked(existing)
+            self.broadcaster.publish(run_id, "run_start", existing.model_dump())
+            return existing
+
+    def begin_retry_failed_run(
+        self,
+        run_id: str,
+        failed_nodeids: list[str],
+        environment: EnvironmentInfo | None = None,
+    ) -> RunState:
+        """Reopens a run to re-execute only its failed/error test cases while keeping passed results."""
+        with self._lock:
+            existing = self._runs.get(run_id)
+            if existing is None:
+                raise KeyError(f"실행 이력을 찾을 수 없습니다: {run_id}")
+
+            failed_set = set(failed_nodeids)
+            existing.status = "running"
+            existing.finished_at = None
+            existing.active_nodeid = None
+            if environment and environment.hostname:
+                existing.environment = environment
+
+            for c in existing.cases:
+                if c.nodeid in failed_set:
+                    c.status = "pending"
+                    c.duration = None
+                    c.started_at = None
+                    c.finished_at = None
+                    c.summary = ""
+                    c.error_message = ""
+                    c.logs = []
+                elif c.status == "running":
+                    c.status = "pending"
+
+            seq = self._log_seq.get(run_id, 0) + 1
+            self._log_seq[run_id] = seq
+            retry_log = LogLine(
+                seq=seq,
+                timestamp=now_iso(),
+                stream="system",
+                level="step",
+                stage="실패 재실행",
+                text=f"[실패 항목 재실행 시작] 실패/오류 항목 {len(failed_nodeids)}건 재실행",
+                nodeid=None,
+            )
+            existing.session_logs.append(retry_log)
+            self._append_log_jsonl(run_id, retry_log)
 
             self._latest_run_id = run_id
             self._recompute_summary_unlocked(existing)

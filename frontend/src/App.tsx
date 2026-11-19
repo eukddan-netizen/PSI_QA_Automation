@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle } from 'lucide-react'
 import { ExecutionStream } from './components/ExecutionStream'
 import { SummaryStrip } from './components/SummaryStrip'
@@ -7,7 +7,7 @@ import { TopBar } from './components/TopBar'
 import { useAutoFocus } from './hooks/useAutoFocus'
 import { useRunNotifications } from './hooks/useRunNotifications'
 import { useRunStream } from './hooks/useRunStream'
-import { buildHierarchyTree } from './types/run'
+import { buildHierarchyTree, mergeCatalogWithRunCases, type TestCaseState } from './types/run'
 
 export function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -27,6 +27,8 @@ export function App() {
     run,
     runs,
     presets,
+    catalogCases,
+    catalogCasesLoading,
     runner,
     connected,
     loading,
@@ -34,10 +36,13 @@ export function App() {
     runBatchSeq,
     selectRun,
     startPresetRun,
+    runSingleCase,
+    retryFailedRun,
     resumeRun,
     stopActiveRun,
     resetView,
     deleteRuns,
+    refreshCatalogCases,
   } = useRunStream()
 
   const {
@@ -47,8 +52,32 @@ export function App() {
     ensurePermission: ensureNotificationPermission,
   } = useRunNotifications(run, runBatchSeq)
 
-  const domains = useMemo(() => buildHierarchyTree(run?.cases ?? []), [run?.cases])
-  const flatCategories = useMemo(() => domains.flatMap((d) => d.categories), [domains])
+  const isRunActive = runner.is_running || run?.status === 'running'
+  const runDomains = useMemo(
+    () => buildHierarchyTree(run?.cases ?? [], isRunActive),
+    [run?.cases, isRunActive],
+  )
+  const mergedSidebarCases = useMemo(
+    () => mergeCatalogWithRunCases(catalogCases, run?.cases ?? []),
+    [catalogCases, run?.cases],
+  )
+  const sidebarDomains = useMemo(
+    () => buildHierarchyTree(mergedSidebarCases, isRunActive),
+    [mergedSidebarCases, isRunActive],
+  )
+  const runCaseNodeIds = useMemo(
+    () => new Set((run?.cases ?? []).map((c) => c.nodeid)),
+    [run?.cases],
+  )
+  const flatCategories = useMemo(() => runDomains.flatMap((d) => d.categories), [runDomains])
+
+  const handleRunSingleCase = useCallback(
+    async (tc: TestCaseState) => {
+      void ensureNotificationPermission()
+      await runSingleCase(tc)
+    },
+    [ensureNotificationPermission, runSingleCase],
+  )
 
   const {
     autoFollow,
@@ -80,6 +109,7 @@ export function App() {
         onSelectRun={selectRun}
         onStartRun={startPresetRun}
         onResumeRun={resumeRun}
+        onRetryFailed={retryFailedRun}
         onStopRun={stopActiveRun}
         onResetView={resetView}
         onDeleteRuns={deleteRuns}
@@ -111,23 +141,30 @@ export function App() {
             runId={run?.run_id}
             runStatus={run?.status}
             runBatchSeq={runBatchSeq}
-            domains={domains}
+            domains={sidebarDomains}
+            runCaseNodeIds={runCaseNodeIds}
             activeNodeId={run?.active_nodeid}
+            isRunning={runner.is_running}
+            catalogLoading={catalogCasesLoading}
             statusFilter={statusFilter}
             onChangeStatusFilter={setStatusFilter}
             onSelectCase={focusCase}
+            onRunSingleCase={handleRunSingleCase}
+            onRefreshCatalog={() => void refreshCatalogCases()}
           />
           <ExecutionStream
             run={run}
             historyCount={runs.length}
-            domains={domains}
+            domains={runDomains}
             statusFilter={statusFilter}
             autoFollow={autoFollow}
+            isRunning={runner.is_running}
             expandedCategories={expandedCategories}
             expandedCases={expandedCases}
             onToggleAutoFollow={setAutoFollow}
             onToggleCategory={toggleCategory}
             onToggleCase={toggleCase}
+            onRunSingleCase={handleRunSingleCase}
             onExpandAll={expandAll}
             onCollapsePassed={collapsePassed}
             registerCaseRef={registerCaseRef}

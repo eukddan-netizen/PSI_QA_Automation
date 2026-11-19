@@ -92,6 +92,7 @@ export interface StartRunPayload {
   target: string
   markers?: string | null
   paths?: string[]
+  nodeids?: string[]
   keyword?: string | null
   title: string
   run_id?: string | null
@@ -133,16 +134,49 @@ export interface DomainGroup {
   categories: CategoryGroup[]
 }
 
-export function deriveAggregateStatus(items: { status: TestStatus }[]): TestStatus {
+export function deriveAggregateStatus(
+  items: { status: TestStatus }[],
+  isRunActive = true,
+): TestStatus {
   if (items.some((i) => i.status === 'running')) return 'running'
   if (items.some((i) => i.status === 'failed' || i.status === 'error')) return 'failed'
   if (items.length > 0 && items.every((i) => i.status === 'skipped')) return 'skipped'
   if (items.length > 0 && items.every((i) => i.status === 'passed' || i.status === 'skipped')) return 'passed'
-  if (items.some((i) => i.status === 'passed')) return 'running'
+  if (items.some((i) => i.status === 'passed')) return isRunActive ? 'running' : 'passed'
   return 'pending'
 }
 
-export function buildHierarchyTree(cases: TestCaseState[]): DomainGroup[] {
+export function mergeCatalogWithRunCases(
+  catalogCases: TestCaseState[],
+  runCases: TestCaseState[],
+): TestCaseState[] {
+  if (catalogCases.length === 0) return runCases
+  if (runCases.length === 0) return catalogCases
+
+  const runByNodeId = new Map<string, TestCaseState>()
+  for (const rc of runCases) {
+    runByNodeId.set(rc.nodeid, rc)
+  }
+
+  const seen = new Set<string>()
+  const merged: TestCaseState[] = []
+
+  for (const cc of catalogCases) {
+    const matched = runByNodeId.get(cc.nodeid)
+    merged.push(matched ?? cc)
+    seen.add(cc.nodeid)
+  }
+
+  for (const rc of runCases) {
+    if (!seen.has(rc.nodeid)) {
+      merged.push(rc)
+    }
+  }
+
+  return merged
+}
+
+export function buildHierarchyTree(cases: TestCaseState[], isRunActive = true): DomainGroup[] {
   const domainMap = new Map<string, { title: string; catMap: Map<string, CategoryGroup> }>()
 
   for (const c of cases) {
@@ -187,13 +221,13 @@ export function buildHierarchyTree(cases: TestCaseState[]): DomainGroup[] {
   for (const [domain, domVal] of domainMap.entries()) {
     const categories = Array.from(domVal.catMap.values()).map((cat) => ({
       ...cat,
-      status: deriveAggregateStatus(cat.cases),
+      status: deriveAggregateStatus(cat.cases, isRunActive),
     }))
     const allCases = categories.flatMap((cat) => cat.cases)
     result.push({
       domain,
       title: domVal.title,
-      status: deriveAggregateStatus(categories),
+      status: deriveAggregateStatus(categories, isRunActive),
       total: allCases.length,
       passed: categories.reduce((acc, cat) => acc + cat.passed, 0),
       failed: categories.reduce((acc, cat) => acc + cat.failed, 0),

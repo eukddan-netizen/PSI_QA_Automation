@@ -133,6 +133,7 @@ class RunnerManager:
                     title=requested_title,
                     target=req.target,
                     environment=EnvironmentInfo(is_admin=is_process_admin()),
+                    reset_nodeids=req.nodeids or None,
                 )
             else:
                 run_id = datetime.now().strftime("run_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
@@ -144,12 +145,22 @@ class RunnerManager:
                 )
 
             cmd = [str(VENV_PYTEST_PATH), "--dashboard", "-s"]
-            if req.markers:
-                cmd.extend(["-m", req.markers])
-            if req.keyword:
-                cmd.extend(["-k", req.keyword])
-            if req.paths:
-                cmd.extend(req.paths)
+            extra_env: dict[str, str] | None = None
+
+            if req.nodeids:
+                file_paths = list(dict.fromkeys(nid.split("::", 1)[0] for nid in req.nodeids))
+                RUNS_DATA_DIR.mkdir(parents=True, exist_ok=True)
+                resume_file = RUNS_DATA_DIR / f"{run_id}.resume.json"
+                resume_file.write_text(json.dumps(req.nodeids, ensure_ascii=False), encoding="utf-8")
+                cmd.extend(file_paths)
+                extra_env = {"PSI_DASHBOARD_RESUME_FILE": str(resume_file)}
+            else:
+                if req.markers:
+                    cmd.extend(["-m", req.markers])
+                if req.keyword:
+                    cmd.extend(["-k", req.keyword])
+                if req.paths:
+                    cmd.extend(req.paths)
 
             return self._launch_pytest_unlocked(
                 run_id=run_id,
@@ -157,6 +168,45 @@ class RunnerManager:
                 target=req.target,
                 cmd=cmd,
                 append_log=bool(target_run_id),
+                extra_env=extra_env,
+            )
+
+    def retry_failed_run(self, run_id: str) -> dict[str, Any]:
+        """Re-executes only failed/error test cases in an existing run while keeping passed results."""
+        with self._lock:
+            if self._active_proc is not None and self._active_proc.poll() is None:
+                raise RuntimeError(f"이미 실행 중인 테스트({self._active_run_id})가 있습니다.")
+
+            if not VENV_PYTEST_PATH.exists():
+                raise FileNotFoundError(f"pytest 실행 파일을 찾을 수 없습니다: {VENV_PYTEST_PATH}")
+
+            snap = run_store.get_run_snapshot(run_id)
+            if snap is None:
+                raise KeyError(f"실행 이력을 찾을 수 없습니다: {run_id}")
+
+            failed_nodeids = [c.nodeid for c in snap.cases if c.status in ("failed", "error")]
+            if not failed_nodeids:
+                raise RuntimeError("재실행할 실패/오류 테스트 항목이 없습니다.")
+
+            file_paths = list(dict.fromkeys(nid.split("::", 1)[0] for nid in failed_nodeids))
+            RUNS_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            resume_file = RUNS_DATA_DIR / f"{run_id}.resume.json"
+            resume_file.write_text(json.dumps(failed_nodeids, ensure_ascii=False), encoding="utf-8")
+
+            run_state = run_store.begin_retry_failed_run(
+                run_id=run_id,
+                failed_nodeids=failed_nodeids,
+                environment=EnvironmentInfo(is_admin=is_process_admin()),
+            )
+
+            cmd = [str(VENV_PYTEST_PATH), "--dashboard", "-s", *file_paths]
+            return self._launch_pytest_unlocked(
+                run_id=run_id,
+                title=run_state.title,
+                target=run_state.target,
+                cmd=cmd,
+                append_log=True,
+                extra_env={"PSI_DASHBOARD_RESUME_FILE": str(resume_file)},
             )
 
     def resume_run(self, run_id: str) -> dict[str, Any]:

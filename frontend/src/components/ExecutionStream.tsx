@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -7,6 +7,8 @@ import {
   Minimize2,
   Maximize2,
   Monitor,
+  Play,
+  RotateCw,
 } from 'lucide-react'
 import type { CategoryGroup, DomainGroup, LogLine, RunState, TestCaseState } from '../types/run'
 import { StatusBadge, StatusDot } from './StatusBadge'
@@ -17,11 +19,13 @@ interface ExecutionStreamProps {
   domains: DomainGroup[]
   statusFilter: 'all' | 'failed' | 'running' | 'passed'
   autoFollow: boolean
+  isRunning: boolean
   expandedCategories: Set<string>
   expandedCases: Set<string>
   onToggleAutoFollow: (val: boolean) => void
   onToggleCategory: (catKey: string) => void
   onToggleCase: (nodeid: string) => void
+  onRunSingleCase: (tc: TestCaseState) => Promise<void> | void
   onExpandAll: () => void
   onCollapsePassed: () => void
   registerCaseRef: (nodeid: string, el: HTMLDivElement | null) => void
@@ -33,16 +37,29 @@ export function ExecutionStream({
   domains,
   statusFilter,
   autoFollow,
+  isRunning,
   expandedCategories,
   expandedCases,
   onToggleAutoFollow,
   onToggleCategory,
   onToggleCase,
+  onRunSingleCase,
   onExpandAll,
   onCollapsePassed,
   registerCaseRef,
 }: ExecutionStreamProps) {
   const activeCase = run?.cases.find((c) => c.nodeid === run.active_nodeid) ?? null
+  const [launchingNodeId, setLaunchingNodeId] = useState<string | null>(null)
+
+  const handleRunCase = async (tc: TestCaseState) => {
+    if (isRunning || launchingNodeId) return
+    setLaunchingNodeId(tc.nodeid)
+    try {
+      await onRunSingleCase(tc)
+    } finally {
+      setLaunchingNodeId(null)
+    }
+  }
 
   if (!run) {
     return (
@@ -58,8 +75,8 @@ export function ExecutionStream({
           <h2 className="text-[14px] font-semibold">QA 자동화 실시간 로그 대기 중</h2>
           <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
             {historyCount > 0
-              ? '우측 상단에서 실행 대상을 체크해 테스트를 시작하거나, 좌측 상단 실행 이력에서 이전 결과를 불러올 수 있습니다.'
-              : '우측 상단에서 실행 대상을 체크하고 테스트 실행 버튼을 누르면 실시간 로그가 이곳에 스트리밍됩니다.'}
+              ? '좌측 테스트 트리에서 개별 항목의 실행 아이콘(▶)을 눌러 바로 테스트하거나, 우측 상단에서 대상을 체크해 실행 및 이전 이력을 불러올 수 있습니다.'
+              : '좌측 테스트 트리에서 개별 항목의 실행 아이콘(▶)을 누르거나, 우측 상단에서 실행 대상을 체크해 테스트를 시작하면 실시간 로그가 이곳에 스트리밍됩니다.'}
           </p>
         </div>
       </main>
@@ -202,8 +219,11 @@ export function ExecutionStream({
                     statusFilter={statusFilter}
                     expanded={expandedCategories.has(cat.key)}
                     expandedCases={expandedCases}
+                    isRunning={isRunning}
+                    launchingNodeId={launchingNodeId}
                     onToggleCategory={() => onToggleCategory(cat.key)}
                     onToggleCase={onToggleCase}
+                    onRunSingleCase={handleRunCase}
                     registerCaseRef={registerCaseRef}
                   />
                 ))}
@@ -221,16 +241,22 @@ function CategoryAccordion({
   statusFilter,
   expanded,
   expandedCases,
+  isRunning,
+  launchingNodeId,
   onToggleCategory,
   onToggleCase,
+  onRunSingleCase,
   registerCaseRef,
 }: {
   cat: CategoryGroup
   statusFilter: 'all' | 'failed' | 'running' | 'passed'
   expanded: boolean
   expandedCases: Set<string>
+  isRunning: boolean
+  launchingNodeId: string | null
   onToggleCategory: () => void
   onToggleCase: (nodeid: string) => void
+  onRunSingleCase: (tc: TestCaseState) => void
   registerCaseRef: (nodeid: string, el: HTMLDivElement | null) => void
 }) {
   const visibleCases = cat.cases.filter((tc) => {
@@ -291,7 +317,10 @@ function CategoryAccordion({
               key={tc.nodeid}
               tc={tc}
               expanded={expandedCases.has(tc.nodeid)}
+              isRunnerBusy={isRunning || launchingNodeId !== null}
+              isLaunchingThis={launchingNodeId === tc.nodeid}
               onToggle={() => onToggleCase(tc.nodeid)}
+              onRunSingle={() => onRunSingleCase(tc)}
               registerRef={(el) => registerCaseRef(tc.nodeid, el)}
             />
           ))}
@@ -304,16 +333,23 @@ function CategoryAccordion({
 function CaseAccordion({
   tc,
   expanded,
+  isRunnerBusy,
+  isLaunchingThis,
   onToggle,
+  onRunSingle,
   registerRef,
 }: {
   tc: TestCaseState
   expanded: boolean
+  isRunnerBusy: boolean
+  isLaunchingThis: boolean
   onToggle: () => void
+  onRunSingle: () => void
   registerRef: (el: HTMLDivElement | null) => void
 }) {
   const isFailure = tc.status === 'failed' || tc.status === 'error'
   const isRunning = tc.status === 'running'
+  const isPending = tc.status === 'pending'
 
   return (
     <div
@@ -327,15 +363,17 @@ function CaseAccordion({
         borderColor: 'var(--border-subtle)',
       }}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between px-3.5 py-2 text-left transition-colors hover:bg-[var(--bg-hover)] cursor-pointer"
+      <div
+        className="flex w-full items-center justify-between transition-colors hover:bg-[var(--bg-hover)]"
         style={{
           backgroundColor: isRunning ? 'var(--bg-subtle)' : 'transparent',
         }}
       >
-        <div className="flex items-center gap-2 min-w-0 pr-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-2 px-3.5 py-2 text-left cursor-pointer"
+        >
           {expanded ? (
             <ChevronDown className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
           ) : (
@@ -367,17 +405,46 @@ function CaseAccordion({
             </span>
           )}
           <span className="truncate text-[12.5px] font-medium">{tc.title}</span>
-        </div>
+        </button>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 pr-3 shrink-0">
           {tc.logs.length > 0 && (
             <span className="font-mono-code text-[11px]" style={{ color: 'var(--text-muted)' }}>
               {tc.logs.length} lines
             </span>
           )}
           <StatusBadge status={tc.status} duration={tc.duration} />
+          <button
+            type="button"
+            disabled={isRunnerBusy}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRunSingle()
+            }}
+            title={
+              isRunnerBusy
+                ? '다른 테스트가 실행 중입니다'
+                : isPending
+                  ? '이 항목만 단건 실행'
+                  : '이 항목만 단건 재실행'
+            }
+            aria-label={`${tc.tc_id || tc.title} 단건 실행`}
+            className="inline-flex h-6 items-center gap-1 rounded border px-1.5 text-[11px] font-medium transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35 cursor-pointer"
+            style={{
+              backgroundColor: isFailure ? 'var(--status-fail-bg)' : 'var(--bg-subtle)',
+              borderColor: isFailure ? 'var(--status-fail-border)' : 'var(--border-subtle)',
+              color: isFailure ? 'var(--status-fail)' : 'var(--text-secondary)',
+            }}
+          >
+            {isPending ? (
+              <Play className="h-2.5 w-2.5 fill-current" />
+            ) : (
+              <RotateCw className={`h-2.5 w-2.5 ${isLaunchingThis ? 'animate-spin' : ''}`} />
+            )}
+            <span>{isPending ? '실행' : '재실행'}</span>
+          </button>
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="px-4 pb-3 pt-1 space-y-2">

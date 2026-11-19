@@ -9,6 +9,7 @@ import {
   Moon,
   Play,
   RotateCcw,
+  RotateCw,
   Shield,
   Square,
   StepForward,
@@ -34,6 +35,7 @@ interface TopBarProps {
   onSelectRun: (runId: string) => void
   onStartRun: (payload: StartRunPayload) => Promise<void>
   onResumeRun: (runId: string) => Promise<void>
+  onRetryFailed: (runId: string) => Promise<void>
   onStopRun: () => Promise<void>
   onResetView: () => void
   onDeleteRuns: (runIds: string[]) => Promise<void>
@@ -54,6 +56,7 @@ export function TopBar({
   onSelectRun,
   onStartRun,
   onResumeRun,
+  onRetryFailed,
   onStopRun,
   onResetView,
   onDeleteRuns,
@@ -62,6 +65,7 @@ export function TopBar({
   const [useAllTarget, setUseAllTarget] = useState(false)
   const [launching, setLaunching] = useState(false)
   const [resuming, setResuming] = useState(false)
+  const [retryingFailed, setRetryingFailed] = useState(false)
   const initializedRef = useRef(false)
 
   useEffect(() => {
@@ -82,15 +86,18 @@ export function TopBar({
   const completedCount = run?.summary.completed ?? 0
   const totalCount = run?.summary.total ?? 0
   const pendingCount = run?.summary.pending ?? 0
+  const failedCount = run?.summary.failed ?? 0
   const canResume = Boolean(
     !runner.is_running &&
       run &&
       pendingCount > 0 &&
       (run.status === 'stopped' || run.status === 'failed'),
   )
+  const canRetryFailed = Boolean(!runner.is_running && run && failedCount > 0)
+  const busyAction = launching || resuming || retryingFailed
 
   const handleLaunch = async () => {
-    if (!runPayload || launching || resuming) return
+    if (!runPayload || busyAction) return
     void onEnsureNotificationPermission()
     setLaunching(true)
     try {
@@ -101,13 +108,24 @@ export function TopBar({
   }
 
   const handleResume = async () => {
-    if (!run || !canResume || resuming || launching) return
+    if (!run || !canResume || busyAction) return
     void onEnsureNotificationPermission()
     setResuming(true)
     try {
       await onResumeRun(run.run_id)
     } finally {
       setResuming(false)
+    }
+  }
+
+  const handleRetryFailed = async () => {
+    if (!run || !canRetryFailed || busyAction) return
+    void onEnsureNotificationPermission()
+    setRetryingFailed(true)
+    try {
+      await onRetryFailed(run.run_id)
+    } finally {
+      setRetryingFailed(false)
     }
   }
 
@@ -239,11 +257,28 @@ export function TopBar({
             </button>
           ) : (
             <>
+              {canRetryFailed && (
+                <button
+                  type="button"
+                  onClick={handleRetryFailed}
+                  disabled={busyAction}
+                  title={`실패/오류 항목 ${failedCount}건만 다시 실행합니다 (기존 정상 결과 유지)`}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded border px-2.5 text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+                    borderColor: 'rgba(248, 113, 113, 0.45)',
+                    color: '#fca5a5',
+                  }}
+                >
+                  <RotateCw className="h-3.5 w-3.5" />
+                  <span>{retryingFailed ? '재실행중...' : `실패 재실행 (${failedCount}건)`}</span>
+                </button>
+              )}
               {canResume && (
                 <button
                   type="button"
                   onClick={handleResume}
-                  disabled={resuming || launching}
+                  disabled={busyAction}
                   title={`중단/미완료된 대기 항목 ${pendingCount}건을 이어서 실행합니다`}
                   className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded border px-2.5 text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   style={{
@@ -259,7 +294,7 @@ export function TopBar({
               <button
                 type="button"
                 onClick={handleLaunch}
-                disabled={!runPayload || launching || resuming}
+                disabled={!runPayload || busyAction}
                 className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded px-3 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 style={{ backgroundColor: 'var(--accent-primary)' }}
               >

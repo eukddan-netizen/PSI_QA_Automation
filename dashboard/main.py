@@ -3,19 +3,29 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
+from dashboard.case_collector import catalog_case_cache
 from dashboard.config import DEFAULT_HOST, DEFAULT_PORT, STATIC_DIR
 from dashboard.routers import catalog, reports, runs
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    catalog_case_cache.warmup_async()
+    yield
+
 
 app = FastAPI(
     title="PSI QA Automation Dashboard",
     version="1.0.0",
     description="로컬 전용 QA 자동화 실시간 로그 대시보드 및 정부 표준 보고서 추출 서버",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(

@@ -15,6 +15,8 @@ interface UseRunStreamResult {
   run: RunState | null
   runs: RunListItem[]
   presets: CatalogPreset[]
+  catalogCases: TestCaseState[]
+  catalogCasesLoading: boolean
   runner: RunnerStatus
   connected: boolean
   loading: boolean
@@ -22,16 +24,21 @@ interface UseRunStreamResult {
   runBatchSeq: number
   selectRun: (runId: string) => Promise<void>
   startPresetRun: (payload: StartRunPayload) => Promise<void>
+  runSingleCase: (tc: TestCaseState) => Promise<void>
+  retryFailedRun: (runId: string) => Promise<void>
   resumeRun: (runId: string) => Promise<void>
   stopActiveRun: () => Promise<void>
   resetView: () => void
   deleteRuns: (runIds: string[]) => Promise<void>
+  refreshCatalogCases: () => Promise<void>
 }
 
 export function useRunStream(): UseRunStreamResult {
   const [run, setRun] = useState<RunState | null>(null)
   const [runs, setRuns] = useState<RunListItem[]>([])
   const [presets, setPresets] = useState<CatalogPreset[]>([])
+  const [catalogCases, setCatalogCases] = useState<TestCaseState[]>([])
+  const [catalogCasesLoading, setCatalogCasesLoading] = useState(true)
   const [runner, setRunner] = useState<RunnerStatus>({ is_running: false, is_admin: false })
   const [connected, setConnected] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -77,6 +84,25 @@ export function useRunStream(): UseRunStreamResult {
       // ignore
     }
   }, [])
+
+  const loadCatalogCases = useCallback(async (refresh = false) => {
+    setCatalogCasesLoading(true)
+    try {
+      const url = refresh ? '/api/catalog/cases?refresh=true' : '/api/catalog/cases'
+      const res = await fetch(url)
+      if (!res.ok) return
+      const data = await res.json()
+      setCatalogCases(data.cases ?? [])
+    } catch {
+      // ignore
+    } finally {
+      setCatalogCasesLoading(false)
+    }
+  }, [])
+
+  const refreshCatalogCases = useCallback(async () => {
+    await loadCatalogCases(true)
+  }, [loadCatalogCases])
 
   const selectRun = useCallback(async (runId: string) => {
     resetViewRef.current = false
@@ -135,6 +161,7 @@ export function useRunStream(): UseRunStreamResult {
     let cancelled = false
 
     async function init() {
+      void loadCatalogCases(false)
       await Promise.all([loadCatalog(), refreshRunsList()])
       try {
         const res = await fetch('/api/runs/latest')
@@ -317,7 +344,7 @@ export function useRunStream(): UseRunStreamResult {
       if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current)
       es.close()
     }
-  }, [flushLogs, loadCatalog, refreshRunsList])
+  }, [flushLogs, loadCatalog, loadCatalogCases, refreshRunsList])
 
   const startPresetRun = useCallback(
     async (payload: StartRunPayload) => {
@@ -331,6 +358,7 @@ export function useRunStream(): UseRunStreamResult {
           target: payload.target,
           markers: payload.markers ?? null,
           paths: payload.paths ?? [],
+          nodeids: payload.nodeids ?? [],
           keyword: payload.keyword?.trim() || null,
           title: payload.title,
           run_id: targetRunId,
@@ -348,6 +376,39 @@ export function useRunStream(): UseRunStreamResult {
       refreshRunsList()
     },
     [refreshRunsList, run?.run_id],
+  )
+
+  const runSingleCase = useCallback(
+    async (tc: TestCaseState) => {
+      const title = tc.tc_id ? `${tc.tc_id} · ${tc.title}` : tc.title
+      await startPresetRun({
+        target: tc.domain || 'custom',
+        nodeids: [tc.nodeid],
+        title,
+        run_id: run?.run_id ?? null,
+        accumulate: Boolean(run?.run_id),
+      })
+    },
+    [run?.run_id, startPresetRun],
+  )
+
+  const retryFailedRun = useCallback(
+    async (runId: string) => {
+      setError(null)
+      resetViewRef.current = false
+      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/retry-failed`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const msg = body.detail || '실패 항목 재실행 시작에 실패했습니다.'
+        setError(msg)
+        throw new Error(msg)
+      }
+      selectedRunIdRef.current = runId
+      refreshRunsList()
+    },
+    [refreshRunsList],
   )
 
   const resumeRun = useCallback(
@@ -427,6 +488,8 @@ export function useRunStream(): UseRunStreamResult {
     run,
     runs,
     presets,
+    catalogCases,
+    catalogCasesLoading,
     runner,
     connected,
     loading,
@@ -434,9 +497,12 @@ export function useRunStream(): UseRunStreamResult {
     runBatchSeq,
     selectRun,
     startPresetRun,
+    runSingleCase,
+    retryFailedRun,
     resumeRun,
     stopActiveRun,
     resetView,
     deleteRuns,
+    refreshCatalogCases,
   }
 }

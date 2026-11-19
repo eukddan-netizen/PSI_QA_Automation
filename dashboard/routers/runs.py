@@ -98,6 +98,18 @@ def resume_run(run_id: str):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.post("/api/runs/{run_id}/retry-failed")
+def retry_failed_run(run_id: str):
+    try:
+        return runner_manager.retry_failed_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post("/api/runs/{run_id}/stop")
 def stop_run(run_id: str):
     return runner_manager.stop_run(run_id)

@@ -100,6 +100,7 @@ class StartRunRequest(BaseModel):
     markers: str | None = None
     keyword: str | None = None
     paths: list[str] = Field(default_factory=list)
+    nodeids: list[str] = Field(default_factory=list)
     title: str | None = None
     run_id: str | None = None
     accumulate: bool = True
