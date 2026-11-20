@@ -166,7 +166,7 @@ def _stop_debug_chrome(port: int, graceful: bool = True) -> None:
         except Exception:
             pass
 
-    # 2. 남아있는 자동화 전용 프로세스(remote-debugging-port / chrome_psi_{port})만 정확히 정리
+    # 2. 남아있는 자동화 전용 프로세스(remote-debugging-port / chrome_psi_{port})만 정확히 정리 후 완전 종료 대기
     force_cmd = (
         "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" "
         f"| Where-Object {{ ($_.CommandLine -match 'remote-debugging-port={port}') -or ($_.CommandLine -match 'chrome_psi_{port}') }} "
@@ -180,6 +180,13 @@ def _stop_debug_chrome(port: int, graceful: bool = True) -> None:
         )
     except Exception:
         pass
+
+    # 3. 자동화 전용 크롬 프로세스가 OS에서 완전히 해제될 때까지 대기 (다음 테스트 CDP/포커스 충돌 방지)
+    wait_deadline = time.time() + 4.0
+    while time.time() < wait_deadline:
+        if not _get_debug_chrome_pids(port):
+            break
+        time.sleep(0.2)
 
 
 def _sanitize_chrome_profile(user_data_dir: str) -> None:

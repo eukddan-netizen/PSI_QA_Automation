@@ -366,24 +366,51 @@ class AppController:
             raise ValueError(f"지원하지 않는 트레이 메뉴 항목입니다: {item_name}")
 
         with self._per_monitor_dpi() as user32:
-            ix, iy, opened_overflow = self._locate_ta_tray_icon()
-
-            user32.SetCursorPos(ix, iy)
-            time.sleep(0.12)
-            user32.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0)
-            time.sleep(0.05)
-            user32.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
+            # 이전 테스트의 잔여 컨텍스트 메뉴(#32768)가 열려 있으면 먼저 정리
+            stale_menu = win32gui.FindWindow("#32768", None)
+            if stale_menu and win32gui.IsWindowVisible(stale_menu):
+                user32.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
+                user32.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
+                time.sleep(0.25)
 
             menu_hwnd = 0
-            start = time.time()
-            while time.time() - start < timeout:
-                h = win32gui.FindWindow("#32768", None)
-                if h and win32gui.IsWindowVisible(h):
-                    mrect = win32gui.GetWindowRect(h)
-                    if mrect[2] > mrect[0] and mrect[3] > mrect[1]:
-                        menu_hwnd = h
-                        break
+            opened_overflow = False
+            max_attempts = 3
+            per_attempt_timeout = max(2.5, timeout / max_attempts)
+
+            for attempt in range(1, max_attempts + 1):
+                ix, iy, opened_overflow = self._locate_ta_tray_icon()
+
+                user32.SetCursorPos(ix, iy)
                 time.sleep(0.15)
+                user32.mouse_event(win32con.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0)
+                time.sleep(0.06)
+                user32.mouse_event(win32con.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
+
+                start = time.time()
+                while time.time() - start < per_attempt_timeout:
+                    h = win32gui.FindWindow("#32768", None)
+                    if h and win32gui.IsWindowVisible(h):
+                        mrect = win32gui.GetWindowRect(h)
+                        if mrect[2] > mrect[0] and mrect[3] > mrect[1]:
+                            menu_hwnd = h
+                            break
+                    time.sleep(0.15)
+
+                if menu_hwnd:
+                    break
+
+                if attempt < max_attempts:
+                    print(
+                        f">>> [AppController] 트레이 컨텍스트 메뉴(#32768) 미감지 "
+                        f"({attempt}/{max_attempts}차) -> 포커스 안정화 후 재시도..."
+                    )
+                    if opened_overflow:
+                        self._close_tray_overflow()
+                        opened_overflow = False
+                    user32.keybd_event(win32con.VK_ESCAPE, 0, 0, 0)
+                    user32.keybd_event(win32con.VK_ESCAPE, 0, win32con.KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.5)
 
             if not menu_hwnd:
                 if opened_overflow:
@@ -593,16 +620,39 @@ class AppController:
             print(">>> [AppController] 인사 UI 닫기 완료!")
         return is_closed
 
+    @classmethod
+    def _wait_process_exited(cls, timeout: float = 4.0) -> bool:
+        """taKeeper.exe 프로세스가 OS 프로세스 목록에서 완전히 사라질 때까지 대기합니다."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                res = subprocess.run(
+                    ["tasklist", "/FI", f"IMAGENAME eq {cls.EXE_NAME}", "/NH"],
+                    capture_output=True,
+                    text=True,
+                    encoding="cp949",
+                    errors="replace",
+                    timeout=3,
+                )
+                if cls.EXE_NAME.lower() not in (res.stdout or "").lower():
+                    return True
+            except Exception:
+                return True
+            time.sleep(0.2)
+        return False
+
     def close(self, timeout: float = 5.0) -> bool:
         """
         보안점검 창 종료 전,
         1. 화면에 떠있는 인사 UI('TA 공지')가 있다면 인사 UI를 먼저 닫고
-        2. 보안점검 창의 우상단 닫기(X) 버튼을 클릭하여 안전하게 닫습니다.
+        2. 보안점검 창의 우상단 닫기(X) 버튼을 클릭하여 안전하게 닫고
+        3. taKeeper.exe 프로세스가 완전히 종료될 때까지 대기(미종료 시 강제 정리)합니다.
         """
         # 1. 인사 UI 먼저 닫기
         self.close_hr_ui()
 
         if not self.hwnd or not win32gui.IsWindow(self.hwnd):
+            self._wait_process_exited(timeout=1.5)
             return True
 
         # 1. 대상 크롬 임베디드 웹뷰 핸들 탐색
@@ -614,6 +664,7 @@ class AppController:
         win32gui.EnumChildWindows(self.hwnd, cb, None)
         target_h = target_h or self.hwnd
 
+        window_closed = False
         try:
             app = Application(backend="uia").connect(handle=target_h)
             win = app.window(handle=target_h)
@@ -659,7 +710,8 @@ class AppController:
                         print(">>> [AppController] 안전 기준 점수 충족 상태: 팝업 없이 즉시 종료 완료!")
                     else:
                         print(">>> [AppController] 보안점검 창 정상 종료 확인 완료!")
-                    return True
+                    window_closed = True
+                    break
 
                 if not clicked_exit:
                     exit_btn = None
@@ -678,14 +730,23 @@ class AppController:
             print(f">>> [AppController] 닫기 버튼 상호작용 중 예외 발생: {e}")
 
         # 4. 창 종료 여부 최종 확인 대기
-        final_deadline = time.time() + 2.0
-        while time.time() < final_deadline:
-            if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
-                print(">>> [AppController] 보안점검 창 정상 종료 확인 완료!")
-                return True
-            time.sleep(0.2)
+        if not window_closed:
+            final_deadline = time.time() + 2.0
+            while time.time() < final_deadline:
+                if not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd)):
+                    print(">>> [AppController] 보안점검 창 정상 종료 확인 완료!")
+                    window_closed = True
+                    break
+                time.sleep(0.2)
 
-        return not (win32gui.IsWindow(self.hwnd) and win32gui.IsWindowVisible(self.hwnd))
+        # 5. taKeeper.exe 프로세스 완전 종료 보장 (다음 테스트 실행 시 잔여 프로세스 간섭 방지)
+        if not self._wait_process_exited(timeout=3.5):
+            print(">>> [AppController] taKeeper.exe 잔여 프로세스 감지 -> 완전 종료 강제 정리...")
+            self.kill_existing(timeout=5.0)
+            window_closed = True
+
+        self.hwnd = None
+        return window_closed
 
 
 # ---------------------------------------------------------------------------
