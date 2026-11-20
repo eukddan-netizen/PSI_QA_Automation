@@ -4,8 +4,9 @@
 - 하단 '내 PC 정리': 트리 체크박스 선택/해제, '정리하기' -> 확인 모달('정리 진행') -> 완료 모달('확인')
 """
 
+import re
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pages.client.main_page import MainPage
 
@@ -27,6 +28,14 @@ class CleanPage(MainPage):
     ]
 
     ALL_LEAF_ITEMS = WINDOWS_ITEMS + BROWSER_ITEMS
+
+    RESULT_STATUSES = (
+        "완료",
+        "정리할 데이터 없음",
+        "부분 완료",
+        "실패",
+        "진행하지 않음",
+    )
 
     def wait_for_clean_ready(self, timeout: float = 10.0) -> None:
         """'PC정리' 탭 DOM(OS VERSION, ANTIVIRUS, FIREWALL, 정리하기 버튼) 렌더링 완료 대기"""
@@ -200,6 +209,22 @@ class CleanPage(MainPage):
 
         raise TimeoutError(f"'{name}' 체크박스 상태 변경({target_state}) 대기 시간 초과 (현재: {self.get_checkbox_state(name)})")
 
+    def get_clean_notice_items(self) -> List[str]:
+        """하단 '내 PC 정리' 영역의 안내 문구 목록 반환"""
+        _, win = self._connect_window()
+        notices: List[Tuple[int, str]] = []
+        for item in win.descendants(control_type="ListItem"):
+            raw = (item.element_info.name or "").strip()
+            if not raw.startswith("·"):
+                continue
+            rect = item.rectangle()
+            if rect.top >= 410:
+                cleaned = raw.lstrip("·").strip()
+                if cleaned:
+                    notices.append((rect.top, cleaned))
+        notices.sort(key=lambda x: x[0])
+        return [text for _, text in notices]
+
     def get_visible_checkbox_names(self) -> List[str]:
         """현재 'PC정리' 탭에 표시된 모든 체크박스 이름 목록 반환"""
         _, win = self._connect_window()
@@ -246,6 +271,140 @@ class CleanPage(MainPage):
             time.sleep(0.2)
         raise TimeoutError("'정리 확인' 모달이 표시되지 않았습니다.")
 
+    def get_confirm_modal_info(self) -> Dict[str, Any]:
+        """
+        열려 있는 '정리 확인' 모달의 텍스트, 선택 항목, 브라우저별 프로필 목록,
+        '정리하기' 버튼 활성화 여부, 실행 중 브라우저 종료 경고 여부를 반환합니다.
+        """
+        _, win = self._connect_window()
+        texts = [
+            (t.element_info.name or "").strip()
+            for t in win.descendants(control_type="Text")
+            if t.element_info.name
+        ]
+        selected_items = [
+            (li.element_info.name or "").strip()
+            for li in win.descendants(control_type="ListItem")
+            if (li.element_info.name or "").strip()
+        ]
+
+        profiles: Dict[str, List[Dict[str, Any]]] = {}
+        browser_all_states: Dict[str, int] = {}
+        for grp in win.descendants(control_type="Group"):
+            if "profile-group" not in (grp.element_info.class_name or ""):
+                continue
+            browser_name = (grp.element_info.name or "").strip()
+            if not browser_name:
+                continue
+            prof_list: List[Dict[str, Any]] = []
+            for cb in grp.descendants(control_type="CheckBox"):
+                cb_name = (cb.element_info.name or "").strip()
+                state = int(cb.get_toggle_state())
+                if "프로필 전체 선택" in cb_name:
+                    browser_all_states[browser_name] = state
+                    continue
+                m = re.search(r"\(([^()]+)\)\s*$", cb_name)
+                folder = m.group(1).strip() if m else cb_name
+                prof_list.append({
+                    "label": cb_name,
+                    "folder": folder,
+                    "checked": state,
+                })
+            profiles[browser_name] = prof_list
+
+        confirm_enabled = False
+        confirm_btns = [
+            b for b in win.descendants(control_type="Button")
+            if (b.element_info.name or "").strip() in ("정리 진행", "정리하기")
+        ]
+        if confirm_btns:
+            try:
+                confirm_enabled = bool(confirm_btns[-1].is_enabled())
+            except Exception:
+                confirm_enabled = True
+
+        running_warnings = [
+            t for t in texts
+            if "백그라운드 프로세스를 종료합니다" in t or "모든 창과 백그라운드 프로세스를 종료" in t
+        ]
+
+        return {
+            "texts": texts,
+            "selected_items": selected_items,
+            "profiles": profiles,
+            "browser_all_states": browser_all_states,
+            "confirm_enabled": confirm_enabled,
+            "running_browser_warnings": running_warnings,
+            "has_running_browser_warning": bool(running_warnings),
+        }
+
+    def select_profiles_in_confirm_modal(
+        self,
+        targets: Dict[str, List[str]],
+        timeout: float = 4.0,
+    ) -> None:
+        """
+        '정리 확인' 모달에서 브라우저별 지정 프로필 폴더들을 선택합니다.
+        예: targets={"Chrome": ["Profile 99"], "Edge": ["Profile 99"]}
+        """
+        self.wait_for_confirm_modal(timeout=timeout)
+        for browser_name, folders in targets.items():
+            for folder in folders:
+                target_h, win = self._connect_window()
+                found = False
+                for grp in win.descendants(control_type="Group"):
+                    if "profile-group" not in (grp.element_info.class_name or ""):
+                        continue
+                    if (grp.element_info.name or "").strip() != browser_name:
+                        continue
+                    for cb in grp.descendants(control_type="CheckBox"):
+                        cb_name = (cb.element_info.name or "").strip()
+                        if "프로필 전체 선택" in cb_name:
+                            continue
+                        if cb_name.endswith(f"({folder})"):
+                            found = True
+                            if int(cb.get_toggle_state()) != 1:
+                                self._click_element(cb, target_h)
+                                deadline = time.time() + timeout
+                                while time.time() < deadline:
+                                    info = self.get_confirm_modal_info()
+                                    matched = [
+                                        p for p in info["profiles"].get(browser_name, [])
+                                        if p["folder"] == folder
+                                    ]
+                                    if matched and matched[0]["checked"] == 1:
+                                        break
+                                    time.sleep(0.15)
+                            break
+                    if found:
+                        break
+                if not found:
+                    raise RuntimeError(
+                        f"'정리 확인' 모달에서 {browser_name} 프로필 '({folder})' 체크박스를 찾을 수 없습니다."
+                    )
+
+    def cancel_confirm_modal(self, timeout: float = 5.0) -> None:
+        """'정리 확인' 모달에서 '취소' 버튼 클릭 및 닫힘 대기"""
+        deadline = time.time() + timeout
+        clicked = False
+        while time.time() < deadline:
+            target_h, win = self._connect_window()
+            if not clicked:
+                for b in win.descendants(control_type="Button"):
+                    if (b.element_info.name or "").strip() == "취소":
+                        try:
+                            b.invoke()
+                        except Exception:
+                            self._click_element(b, target_h)
+                        clicked = True
+                        break
+            else:
+                texts = {(t.element_info.name or "").strip() for t in win.descendants(control_type="Text")}
+                if "정리 확인" not in texts:
+                    return
+            time.sleep(0.15)
+        raise TimeoutError("'정리 확인' 모달이 '취소' 클릭 후 닫히지 않았습니다.")
+
     def confirm_clean(self, timeout: float = 5.0) -> None:
         """'정리 확인' 모달에서 확인('정리 진행' 또는 '정리하기') 버튼 클릭"""
         self.wait_for_confirm_modal(timeout=timeout)
@@ -257,6 +416,8 @@ class CleanPage(MainPage):
         if candidates:
             # 모달이 열린 상태에서는 모달 내부 버튼(마지막 요소)을 우선 선택
             btn = candidates[-1]
+            if not btn.is_enabled():
+                raise RuntimeError("'정리 확인' 모달의 '정리하기' 버튼이 비활성화 상태입니다. (프로필 미선택 등)")
             try:
                 btn.invoke()
             except Exception:
@@ -281,13 +442,61 @@ class CleanPage(MainPage):
             return True
         return False
 
-    def wait_for_complete_modal(self, timeout: float = 15.0) -> None:
-        """정리 완료/결과 모달('정리가 완료되었습니다!' 또는 '내 PC 정리' 결과 모달) 노출 대기"""
+    def get_complete_modal_result(self) -> Dict[str, Any]:
+        """
+        현재 표시된 정리 완료/결과 모달의 텍스트, 처리 완료/미완료 건수,
+        프로필/대상별 상태('완료', '정리할 데이터 없음', '부분 완료', '실패', '진행하지 않음')를 파싱해 반환합니다.
+        """
+        _, win = self._connect_window()
+        texts = [
+            (t.element_info.name or "").strip()
+            for t in win.descendants(control_type="Text")
+            if t.element_info.name
+        ]
+        summary_text = next((t for t in texts if "처리 완료" in t), "")
+        completed_count = None
+        incomplete_count = None
+        m = re.search(r"처리\s*완료\s*(\d+)\s*개.*?미완료\s*(\d+)\s*개", summary_text)
+        if m:
+            completed_count = int(m.group(1))
+            incomplete_count = int(m.group(2))
+
+        profile_results: Dict[str, str] = {}
+        for idx, txt in enumerate(texts):
+            if txt in self.RESULT_STATUSES and idx > 0:
+                target_label = texts[idx - 1]
+                if target_label and target_label not in self.RESULT_STATUSES:
+                    profile_results[target_label] = txt
+
+        return {
+            "texts": texts,
+            "summary_text": summary_text,
+            "completed_count": completed_count,
+            "incomplete_count": incomplete_count,
+            "profile_results": profile_results,
+        }
+
+    def wait_for_complete_modal(self, timeout: float = 30.0) -> Dict[str, Any]:
+        """
+        정리 진행 상태를 거쳐 최종 완료/결과 모달이 표시될 때까지 대기하고,
+        관찰된 진행 문구(progress_texts)와 최종 결과(result)를 반환합니다.
+        """
         deadline = time.time() + timeout
+        progress_texts: List[str] = []
         while time.time() < deadline:
             _, win = self._connect_window()
             if self._is_complete_modal_visible(win):
-                return
+                res = self.get_complete_modal_result()
+                res["progress_texts"] = progress_texts
+                return res
+            cur_texts = [
+                (t.element_info.name or "").strip()
+                for t in win.descendants(control_type="Text")
+                if t.element_info.name
+            ]
+            for ct in cur_texts:
+                if any(k in ct for k in ("경과 시간", "개 항목 처리", "종료를 기다리고 있습니다")) and ct not in progress_texts:
+                    progress_texts.append(ct)
             time.sleep(0.25)
         raise TimeoutError("정리 완료 모달('정리가 완료되었습니다!' / '내 PC 정리')이 표시되지 않았습니다.")
 
@@ -314,12 +523,23 @@ class CleanPage(MainPage):
             raise TimeoutError("완료 모달에서 '확인' 버튼을 찾을 수 없습니다.")
         raise TimeoutError("완료 모달이 '확인' 클릭 후 닫히지 않았습니다.")
 
-    def run_clean_for_items(self, item_names: List[str], timeout: float = 15.0) -> None:
-        """지정한 항목들만 체크한 뒤 '정리하기' -> '정리 진행' -> 완료 '확인'까지 일괄 실행"""
+    def run_clean_for_items(
+        self,
+        item_names: List[str],
+        browser_profiles: Optional[Dict[str, List[str]]] = None,
+        timeout: float = 30.0,
+    ) -> Dict[str, Any]:
+        """
+        지정한 항목들만 체크한 뒤 '정리하기' -> (브라우저 프로필 선택) -> 확인 -> 완료 모달 파싱 -> '확인' 닫기까지 일괄 실행.
+        """
         self.uncheck_all()
         for name in item_names:
             self.set_checkbox(name, True)
         self.click_clean_button()
+        self.wait_for_confirm_modal(timeout=5.0)
+        if browser_profiles:
+            self.select_profiles_in_confirm_modal(browser_profiles, timeout=5.0)
         self.confirm_clean(timeout=5.0)
-        self.wait_for_complete_modal(timeout=timeout)
+        result = self.wait_for_complete_modal(timeout=timeout)
         self.close_complete_modal(timeout=5.0)
+        return result
