@@ -216,6 +216,36 @@ class HelpModalPage:
         app = Application(backend="uia").connect(handle=target_h)
         return target_h, app.window(handle=target_h)
 
+    def _safe_descendants(
+        self,
+        win=None,
+        control_type: Optional[str] = None,
+        handle: Optional[int] = None,
+        retries: int = 5,
+        delay: float = 0.08,
+    ) -> List[Any]:
+        """
+        Chromium 웹뷰 DOM 전환 직후 사라진 노드의 control_type이 None으로 바뀌며
+        pywinauto UIAWrapper.find_wrapper()에서 발생하는 KeyError: None 및
+        일시적 UIA/COM 오류를 재시도하여 안전하게 descendants 목록을 반환합니다.
+        """
+        kwargs = {"control_type": control_type} if control_type else {}
+        cur_win = win
+        last_err: Optional[Exception] = None
+        for attempt in range(retries):
+            try:
+                if cur_win is None:
+                    _, cur_win = self._connect_window(handle=handle)
+                return cur_win.descendants(**kwargs)
+            except Exception as exc:
+                last_err = exc
+                if attempt + 1 < retries:
+                    time.sleep(delay)
+                    cur_win = None
+        if last_err is not None:
+            raise last_err
+        return []
+
     def _click_element(self, elem, target_h: Optional[int] = None) -> None:
         """
         물리 마우스 이동(SetCursorPos) 없이 PostMessage로 요소를 클릭합니다.
@@ -261,8 +291,11 @@ class HelpModalPage:
                 top_bar_bottom = win_rect.top + 80
 
                 candidate_btns = []
-                for b in win.descendants(control_type="Button"):
-                    r = b.rectangle()
+                for b in self._safe_descendants(win, control_type="Button", handle=handle):
+                    try:
+                        r = b.rectangle()
+                    except Exception:
+                        continue
                     if r.width() <= 0 or r.height() <= 0:
                         continue
                     if r.top < top_bar_bottom and r.right > win_rect.right - 150:
@@ -319,9 +352,12 @@ class HelpModalPage:
         before_collapsed = self.is_nav_collapsed()
         target_h, win = self._connect_window()
         menu_btn = None
-        for b in win.descendants(control_type="Button"):
-            name = (b.element_info.name or "").strip()
-            cls_name = b.element_info.class_name or ""
+        for b in self._safe_descendants(win, control_type="Button"):
+            try:
+                name = (b.element_info.name or "").strip()
+                cls_name = b.element_info.class_name or ""
+            except Exception:
+                continue
             if name == "☰" or "menu-btn" in cls_name:
                 menu_btn = b
                 break
@@ -349,35 +385,53 @@ class HelpModalPage:
         - 축소 상태일 경우 ListItem의 텍스트가 번호("1", "2")로 축소되고 너비가 좁아짐 (< 100px)
         - 펼쳐진 상태일 경우 긴 한글 항목명 및 넓은 너비 (> 200px) 유지
         """
-        _, win = self._connect_window()
-        list_items = win.descendants(control_type="ListItem")
-        if not list_items:
-            return False
+        for _ in range(3):
+            try:
+                list_items = self._safe_descendants(control_type="ListItem")
+                if not list_items:
+                    return False
 
-        first_item = list_items[0]
-        name = (first_item.element_info.name or "").strip()
-        width = first_item.rectangle().width()
-        # 축소 상태: name == "1" 이거나 width < 120
-        return name == "1" or width < 120
+                first_item = list_items[0]
+                name = (first_item.element_info.name or "").strip()
+                width = first_item.rectangle().width()
+                # 축소 상태: name == "1" 이거나 width < 120
+                return name == "1" or width < 120
+            except Exception:
+                time.sleep(0.08)
+        return False
 
     def get_item_links(self) -> List[Any]:
         """좌측 네비게이션 목록의 53개 항목 하이퍼링크 객체 목록 반환"""
-        _, win = self._connect_window()
-        links = []
-        for d in win.descendants(control_type="Hyperlink"):
-            cls_name = d.element_info.class_name or ""
-            if "lg-link" in cls_name:
-                links.append(d)
-        return links
+        for _ in range(3):
+            try:
+                links = []
+                for d in self._safe_descendants(control_type="Hyperlink"):
+                    try:
+                        cls_name = d.element_info.class_name or ""
+                    except Exception:
+                        continue
+                    if "lg-link" in cls_name:
+                        links.append(d)
+                return links
+            except Exception:
+                time.sleep(0.08)
+        return []
 
     def get_nav_items_texts(self) -> List[str]:
         """좌측 네비게이션 목록에 표시된 항목 텍스트 목록 반환"""
-        _, win = self._connect_window()
-        return [
-            (d.element_info.name or "").strip()
-            for d in win.descendants(control_type="Hyperlink")
-            if "lg-link" in (d.element_info.class_name or "")
-        ]
+        for _ in range(3):
+            try:
+                items = []
+                for d in self._safe_descendants(control_type="Hyperlink"):
+                    try:
+                        if "lg-link" in (d.element_info.class_name or ""):
+                            items.append((d.element_info.name or "").strip())
+                    except Exception:
+                        continue
+                return items
+            except Exception:
+                time.sleep(0.08)
+        return []
 
     def select_item(self, target: Union[int, str], timeout: float = 5.0) -> str:
         """
@@ -409,25 +463,38 @@ class HelpModalPage:
         except Exception:
             self._click_element(target_link)
 
+        # 웹뷰 DOM 교체 직후 stale UIA 노드 조회 충돌(KeyError: None) 방지를 위해 짧게 안정화
+        time.sleep(0.08)
+
         deadline = time.time() + timeout
         while time.time() < deadline:
-            header = self.get_header_title()
-            if header == item_name or item_name in header:
-                if self.get_content_texts():
-                    return item_name
-            time.sleep(0.15)
+            try:
+                header = self.get_header_title()
+                if header == item_name or item_name in header:
+                    if self.get_content_texts():
+                        return item_name
+            except Exception:
+                pass
+            time.sleep(0.12)
         return item_name
 
     def get_header_title(self) -> str:
         """우측 상단 현재 선택된 항목의 헤더 타이틀 반환"""
-        _, win = self._connect_window()
-        for d in win.descendants(control_type="Text"):
-            r = d.rectangle()
-            # 우측 본문 상단 헤더 영역 (left >= 600, top < 260)
-            if r.left >= 600 and r.top < 260:
-                name = (d.element_info.name or "").strip()
-                if name:
-                    return name
+        for _ in range(4):
+            try:
+                for d in self._safe_descendants(control_type="Text"):
+                    try:
+                        r = d.rectangle()
+                        # 우측 본문 상단 헤더 영역 (left >= 600, top < 260)
+                        if r.left >= 600 and r.top < 260:
+                            name = (d.element_info.name or "").strip()
+                            if name:
+                                return name
+                    except Exception:
+                        continue
+                return ""
+            except Exception:
+                time.sleep(0.08)
         return ""
 
     def get_accordion_buttons(self) -> List[Dict[str, Any]]:
@@ -438,23 +505,30 @@ class HelpModalPage:
         - state: 'expanded'(▲) 또는 'collapsed'(▼)
         - element: UIA 요소 객체
         """
-        _, win = self._connect_window()
-        buttons = []
-        for b in win.descendants(control_type="Button"):
-            r = b.rectangle()
-            if r.left < 600:
-                continue
-            name = (b.element_info.name or "").strip()
-            if "▲" in name or "▼" in name:
-                state = "expanded" if "▲" in name else "collapsed"
-                label = name.replace("▲", "").replace("▼", "").strip()
-                buttons.append({
-                    "name": name,
-                    "label": label,
-                    "state": state,
-                    "element": b
-                })
-        return buttons
+        for _ in range(4):
+            try:
+                buttons = []
+                for b in self._safe_descendants(control_type="Button"):
+                    try:
+                        r = b.rectangle()
+                        if r.left < 600:
+                            continue
+                        name = (b.element_info.name or "").strip()
+                    except Exception:
+                        continue
+                    if "▲" in name or "▼" in name:
+                        state = "expanded" if "▲" in name else "collapsed"
+                        label = name.replace("▲", "").replace("▼", "").strip()
+                        buttons.append({
+                            "name": name,
+                            "label": label,
+                            "state": state,
+                            "element": b
+                        })
+                return buttons
+            except Exception:
+                time.sleep(0.08)
+        return []
 
     def toggle_accordion(self, button_label_or_index: Union[int, str], timeout: float = 5.0) -> Tuple[str, str]:
         """
@@ -504,16 +578,23 @@ class HelpModalPage:
 
     def get_content_texts(self) -> List[str]:
         """우측 본문 영역의 모든 텍스트 목록 수집 (이미지는 제외)"""
-        _, win = self._connect_window()
-        texts = []
-        for d in win.descendants(control_type="Text"):
-            r = d.rectangle()
-            if r.left < 600:
-                continue
-            name = (d.element_info.name or "").strip()
-            if name and name not in ("▲", "▼"):
-                texts.append(name)
-        return texts
+        for _ in range(4):
+            try:
+                texts = []
+                for d in self._safe_descendants(control_type="Text"):
+                    try:
+                        r = d.rectangle()
+                        if r.left < 600:
+                            continue
+                        name = (d.element_info.name or "").strip()
+                    except Exception:
+                        continue
+                    if name and name not in ("▲", "▼"):
+                        texts.append(name)
+                return texts
+            except Exception:
+                time.sleep(0.08)
+        return []
 
     def _is_language_applied(self, is_en: bool) -> bool:
         """좌측 53개 도움말 항목이 목표 언어(영문/한글)로 반영되었는지 확인"""
@@ -545,7 +626,7 @@ class HelpModalPage:
         self.bring_to_front()
         target_h, win = self._connect_window()
         combo = None
-        for d in win.descendants(control_type="ComboBox"):
+        for d in self._safe_descendants(win, control_type="ComboBox"):
             combo = d
             break
 
