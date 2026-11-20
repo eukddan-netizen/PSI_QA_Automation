@@ -285,27 +285,51 @@ class AppController:
             pass
         return None
 
-    def _locate_ta_tray_icon(self) -> Tuple[int, int, bool]:
+    def _locate_ta_tray_icon(self, timeout: float = 20.0) -> Tuple[int, int, bool]:
         """
         TA-STR / TA-PRS 트레이 아이콘 좌표를 탐색합니다.
         1) 작업표시줄(Shell_TrayWnd)에 직접 고정·노출된 경우 오버플로를 열지 않고 좌표 반환
         2) 없으면 숨겨진 아이콘 영역(오버플로)을 열어 탐색
+        3) 에이전트 업데이트 직후 등 일시적으로 트레이 아이콘이 재등록되는 중이라면
+           timeout 동안 작업표시줄과 오버플로 영역을 반복 재탐색합니다.
         반환값: (x, y, opened_overflow)
         """
-        tray_hwnd = win32gui.FindWindow("Shell_TrayWnd", None)
-        pos = self._find_ta_icon_center_in_hwnd(tray_hwnd, is_overflow=False)
-        if pos is not None:
-            return pos[0], pos[1], False
+        deadline = time.time() + max(3.0, timeout)
+        next_overflow_check_at = 0.0
+        logged_waiting = False
 
-        self._open_tray_overflow()
-        deadline = time.time() + 3.0
-        while time.time() < deadline:
-            ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
-            if ov and win32gui.IsWindowVisible(ov):
-                pos = self._find_ta_icon_center_in_hwnd(ov, is_overflow=True)
-                if pos is not None:
-                    return pos[0], pos[1], True
-            time.sleep(0.2)
+        while True:
+            tray_hwnd = win32gui.FindWindow("Shell_TrayWnd", None)
+            pos = self._find_ta_icon_center_in_hwnd(tray_hwnd, is_overflow=False)
+            if pos is not None:
+                return pos[0], pos[1], False
+
+            now = time.time()
+            if now >= next_overflow_check_at:
+                self._open_tray_overflow()
+                ov_deadline = min(deadline, time.time() + 1.8)
+                while time.time() < ov_deadline:
+                    ov = win32gui.FindWindow("TopLevelWindowForOverflowXamlIsland", None)
+                    if ov and win32gui.IsWindowVisible(ov):
+                        pos = self._find_ta_icon_center_in_hwnd(ov, is_overflow=True)
+                        if pos is not None:
+                            return pos[0], pos[1], True
+                    time.sleep(0.2)
+
+                # 오버플로에서도 미발견 시 팝업을 닫고 다음 주기까지 작업표시줄 재등장을 감시
+                self._close_tray_overflow()
+                next_overflow_check_at = time.time() + 4.0
+
+            if time.time() >= deadline:
+                break
+
+            if not logged_waiting:
+                print(
+                    ">>> [트레이 탐색] TA-STR/TA-PRS 트레이 아이콘 미감지 "
+                    "(에이전트 재시작·재등록 대기 후 재탐색 중...)"
+                )
+                logged_waiting = True
+            time.sleep(0.5)
 
         raise RuntimeError(
             "작업표시줄 및 숨겨진 아이콘 영역에서 'TA-STR' 또는 'TA-PRS' 트레이 아이콘을 찾지 못했습니다."
@@ -715,10 +739,18 @@ class AppController:
 
                 if not clicked_exit:
                     exit_btn = None
-                    for b in win.descendants(control_type="Button"):
-                        if b.element_info.name == "종료":
-                            exit_btn = b
-                            break
+                    try:
+                        for b in win.descendants(control_type="Button"):
+                            try:
+                                if b.element_info.name == "종료":
+                                    exit_btn = b
+                                    break
+                            except Exception:
+                                continue
+                    except Exception:
+                        # 창 종료 중 웹뷰 DOM 해제로 인한 일시적 UIA KeyError(None) 등은 무시하고 다음 루프에서 창 종료 여부 재확인
+                        time.sleep(0.15)
+                        continue
                     if exit_btn:
                         print(f">>> [AppController] 안전 기준 점수 미만 팝업 감지 -> '종료' 버튼 클릭: {exit_btn.rectangle()}")
                         _click_elem(exit_btn)
