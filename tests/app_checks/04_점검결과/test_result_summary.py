@@ -3,10 +3,20 @@
 - Row 66~68 및 점검결과 탭 공통 요구사항 1~4번
 """
 
+import re
 import pytest
 
 from common.os_utils import get_current_machine_ips
 from pages.client.inspection_result_page import InspectionResultPage
+
+
+def _normalize_item_title(name: str) -> str:
+    """항목명 비교를 위해 [선택]/[권고] 접두어 제거 및 SW/소프트웨어, HW/하드웨어 표기를 정규화합니다."""
+    text = re.sub(r"\[(선택|권고)\]", "", name or "")
+    text = text.lower()
+    text = text.replace("소프트웨어", "sw").replace("하드웨어", "hw")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 @pytest.mark.app_check
@@ -148,7 +158,7 @@ def test_030_서버정책_항목정합성_및_조치버튼(result_tab_session, s
             continue
 
         pol = active_map[no]
-        if row["title"] not in pol["name"]:
+        if _normalize_item_title(row["title"]) not in _normalize_item_title(pol["name"]):
             errors.append(f"[{no}번] 항목명 불일치: 앱='{row['title']}', 서버='{pol['name']}'")
 
         if not row["has_detail_button"]:
