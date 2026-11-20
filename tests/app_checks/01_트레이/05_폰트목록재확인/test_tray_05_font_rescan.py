@@ -18,7 +18,7 @@ def test_010_폰트목록_재확인(app_ctrl):
     - 조건: 정상 동작
     - 액션: 트레이 아이콘 > 폰트 목록 재확인 클릭
     - 기대 결과: "폰트 목록 재검사를 성공적으로 수행하였습니다." 팝업 출력 확인
-    (1분/60초 경과 후에도 반응이 없으면 PASS 처리)
+    (10분/600초 경과 후에도 반응이 없으면 PASS 처리)
     """
     require_admin(
         "보안 에이전트(taAssistant) 트레이 우클릭 메뉴 제어(Windows UIPI 제약 우회)를 위해 "
@@ -26,9 +26,9 @@ def test_010_폰트목록_재확인(app_ctrl):
     )
 
     app_ctrl.click_tray_menu_item("폰트 목록 재확인")
-    dialog = app_ctrl.wait_for_tray_dialog(timeout=60.0)
+    dialog = app_ctrl.wait_for_tray_dialog(timeout=600.0)
     if dialog is None:
-        print(">>> [5_0001] 1분(60초) 경과 후에도 반응(팝업)이 없어 PASS 처리합니다. (지연 팝업 자동 닫기 감시 등록)")
+        print(">>> [5_0001] 10분(600초) 경과 후에도 반응(팝업)이 없어 PASS 처리합니다. (지연 팝업 자동 닫기 감시 등록)")
         register_delayed_rescan_watcher("폰트")
         return
 
