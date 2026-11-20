@@ -44,6 +44,13 @@ export function TestTreePanel({
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(() => new Set())
   const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set())
   const [launchingNodeId, setLaunchingNodeId] = useState<string | null>(null)
+  const [hoverTooltip, setHoverTooltip] = useState<{
+    text: string
+    subtext?: string
+    top: number
+    left: number
+  } | null>(null)
+  const asideRef = useRef<HTMLElement | null>(null)
   const seenRunIdRef = useRef<string | null | undefined>(undefined)
   const initExpandedCatalogRef = useRef(false)
   const lastBatchSeqRef = useRef<number>(runBatchSeq)
@@ -53,6 +60,30 @@ export function TestTreePanel({
   const baselineCatDoneRef = useRef<Map<string, number>>(new Map())
   const autoOpenedCatsRef = useRef<Set<string>>(new Set())
   const autoOpenedDomainsRef = useRef<Set<string>>(new Set())
+  const wasRunningCatsRef = useRef<Set<string>>(new Set())
+  const autoClosedCatsRef = useRef<Set<string>>(new Set())
+  const wasRunningDomainsRef = useRef<Set<string>>(new Set())
+  const autoClosedDomainsRef = useRef<Set<string>>(new Set())
+
+  const showTruncatedTooltip = (
+    e: React.MouseEvent<HTMLElement>,
+    text: string,
+    subtext?: string,
+  ) => {
+    const target = e.currentTarget
+    const truncEl = target.querySelector<HTMLElement>('[data-trunc-label]')
+    if (truncEl && truncEl.scrollWidth <= truncEl.clientWidth + 1) {
+      setHoverTooltip(null)
+      return
+    }
+    const rowRect = target.getBoundingClientRect()
+    const asideRect = asideRef.current?.getBoundingClientRect()
+    const left = asideRect ? asideRect.right + 8 : rowRect.right + 8
+    const clampedTop = Math.max(48, Math.min(window.innerHeight - 48, rowRect.top + rowRect.height / 2))
+    setHoverTooltip({ text, subtext, top: clampedTop, left })
+  }
+
+  const hideTooltip = () => setHoverTooltip(null)
 
   const handleRunSingle = async (tc: TestCaseState) => {
     if (isRunning || launchingNodeId) return
@@ -83,6 +114,10 @@ export function TestTreePanel({
       baselineCatDoneRef.current = new Map()
       autoOpenedCatsRef.current = new Set()
       autoOpenedDomainsRef.current = new Set()
+      wasRunningCatsRef.current = new Set()
+      autoClosedCatsRef.current = new Set()
+      wasRunningDomainsRef.current = new Set()
+      autoClosedDomainsRef.current = new Set()
       if (!runId) {
         initExpandedCatalogRef.current = domains.length > 0
         setExpandedDomains(new Set(domains.map((d) => d.domain)))
@@ -106,6 +141,10 @@ export function TestTreePanel({
       )
       autoOpenedCatsRef.current = new Set()
       autoOpenedDomainsRef.current = new Set()
+      wasRunningCatsRef.current = new Set()
+      autoClosedCatsRef.current = new Set()
+      wasRunningDomainsRef.current = new Set()
+      autoClosedDomainsRef.current = new Set()
       setExpandedDomains(new Set())
       setExpandedCats(new Set())
     } else {
@@ -121,11 +160,23 @@ export function TestTreePanel({
       return
     }
 
+    const activeRunningDomains = new Set(domains.filter((d) => d.running > 0).map((d) => d.domain))
+    const activeRunningCats = new Set(
+      domains.flatMap((d) => d.categories.filter((c) => c.running > 0).map((c) => c.key)),
+    )
+    const isRunFinished = runStatus !== 'running'
+
     const newDomains: string[] = []
+    const closeDomains: string[] = []
     const newCats: string[] = []
+    const closeCats: string[] = []
 
     for (const dom of domains) {
       const domDone = dom.passed + dom.failed + dom.skipped
+      if (dom.running > 0) {
+        wasRunningDomainsRef.current.add(dom.domain)
+      }
+
       let domActive: boolean
       if (activeBatchOnlyRef.current) {
         let domBase = baselineDomDoneRef.current.get(dom.domain) ?? 0
@@ -135,7 +186,7 @@ export function TestTreePanel({
         }
         domActive = dom.running > 0 || domDone > domBase
       } else {
-        domActive = dom.running > 0 || domDone > 0
+        domActive = dom.running > 0 || (!isRunFinished && domDone > 0)
       }
 
       if (domActive && !autoOpenedDomainsRef.current.has(dom.domain)) {
@@ -143,8 +194,23 @@ export function TestTreePanel({
         newDomains.push(dom.domain)
       }
 
+      const otherDomainRunning = Array.from(activeRunningDomains).some((d) => d !== dom.domain)
+      if (
+        wasRunningDomainsRef.current.has(dom.domain) &&
+        dom.running === 0 &&
+        !autoClosedDomainsRef.current.has(dom.domain) &&
+        (domDone >= dom.total || otherDomainRunning || isRunFinished)
+      ) {
+        autoClosedDomainsRef.current.add(dom.domain)
+        closeDomains.push(dom.domain)
+      }
+
       for (const cat of dom.categories) {
         const catDone = cat.passed + cat.failed + cat.skipped
+        if (cat.running > 0) {
+          wasRunningCatsRef.current.add(cat.key)
+        }
+
         let catActive: boolean
         if (activeBatchOnlyRef.current) {
           let catBase = baselineCatDoneRef.current.get(cat.key) ?? 0
@@ -154,27 +220,40 @@ export function TestTreePanel({
           }
           catActive = cat.running > 0 || catDone > catBase
         } else {
-          catActive = cat.running > 0 || catDone > 0
+          catActive = cat.running > 0 || (!isRunFinished && catDone > 0)
         }
 
         if (catActive && !autoOpenedCatsRef.current.has(cat.key)) {
           autoOpenedCatsRef.current.add(cat.key)
           newCats.push(cat.key)
         }
+
+        const otherCatRunning = Array.from(activeRunningCats).some((k) => k !== cat.key)
+        if (
+          wasRunningCatsRef.current.has(cat.key) &&
+          cat.running === 0 &&
+          !autoClosedCatsRef.current.has(cat.key) &&
+          (catDone >= cat.total || otherCatRunning || isRunFinished)
+        ) {
+          autoClosedCatsRef.current.add(cat.key)
+          closeCats.push(cat.key)
+        }
       }
     }
 
-    if (newDomains.length > 0) {
+    if (newDomains.length > 0 || closeDomains.length > 0) {
       setExpandedDomains((prev) => {
         const next = new Set(prev)
         newDomains.forEach((d) => next.add(d))
+        closeDomains.forEach((d) => next.delete(d))
         return next
       })
     }
-    if (newCats.length > 0) {
+    if (newCats.length > 0 || closeCats.length > 0) {
       setExpandedCats((prev) => {
         const next = new Set(prev)
         newCats.forEach((c) => next.add(c))
+        closeCats.forEach((c) => next.delete(c))
         return next
       })
     }
@@ -236,6 +315,8 @@ export function TestTreePanel({
 
   return (
     <aside
+      ref={asideRef}
+      onMouseLeave={hideTooltip}
       className="flex h-full w-[310px] shrink-0 flex-col border-r select-none"
       style={{
         backgroundColor: 'var(--bg-sidebar)',
@@ -310,7 +391,10 @@ export function TestTreePanel({
       </div>
 
       {/* 3-Level Hierarchy Explorer */}
-      <div className="flex-1 overflow-y-auto px-2 py-2 text-[12px]">
+      <div
+        onScroll={hideTooltip}
+        className="flex-1 overflow-y-auto px-2 py-2 text-[12px]"
+      >
         {catalogLoading && domains.length === 0 ? (
           <div
             className="flex flex-col items-center justify-center gap-2 px-2 py-10 text-center text-[12px]"
@@ -333,6 +417,8 @@ export function TestTreePanel({
                 <button
                   type="button"
                   onClick={() => toggleDomain(dom.domain)}
+                  onMouseEnter={(e) => showTruncatedTooltip(e, dom.title)}
+                  onMouseLeave={hideTooltip}
                   className="flex w-full items-center justify-between rounded px-1.5 py-1.5 text-left font-semibold transition-colors hover:opacity-85 cursor-pointer"
                   style={{ color: 'var(--text-primary)' }}
                 >
@@ -343,7 +429,7 @@ export function TestTreePanel({
                       <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
                     )}
                     <StatusDot status={dom.status} />
-                    <span className="truncate">{dom.title}</span>
+                    <span data-trunc-label className="truncate">{dom.title}</span>
                   </span>
                   <span className="font-mono-code shrink-0 text-[11px]" style={{ color: 'var(--text-muted)' }}>
                     {runId ? `${domDone}/${dom.total}` : `${dom.total}건`}
@@ -360,6 +446,8 @@ export function TestTreePanel({
                           <button
                             type="button"
                             onClick={() => toggleCat(cat.key)}
+                            onMouseEnter={(e) => showTruncatedTooltip(e, cat.title)}
+                            onMouseLeave={hideTooltip}
                             className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left transition-colors cursor-pointer"
                             style={{ color: 'var(--text-secondary)' }}
                           >
@@ -370,7 +458,7 @@ export function TestTreePanel({
                                 <ChevronRight className="h-3 w-3 shrink-0" />
                               )}
                               <StatusDot status={cat.status} />
-                              <span className="truncate font-medium">{cat.title}</span>
+                              <span data-trunc-label className="truncate font-medium">{cat.title}</span>
                             </span>
                             <CategoryMiniCounter
                               hasRun={Boolean(runId)}
@@ -391,6 +479,7 @@ export function TestTreePanel({
                                 const inCurrentRun = runCaseNodeIds.has(tc.nodeid)
                                 const isFailure = tc.status === 'failed' || tc.status === 'error'
                                 const isLaunchingThis = launchingNodeId === tc.nodeid
+                                const fullLabel = `${tc.tc_id ? `[${tc.tc_id}] ` : ''}${tc.title}`
                                 return (
                                   <div
                                     key={tc.nodeid}
@@ -406,14 +495,21 @@ export function TestTreePanel({
                                           onSelectCase(cat.key, tc.nodeid)
                                         }
                                       }}
-                                      title={`${tc.tc_id ? `[${tc.tc_id}] ` : ''}${tc.title}\n(${tc.id})${inCurrentRun ? '' : '\n우측 실행 아이콘(▶)을 눌러 개별 테스트할 수 있습니다.'}`}
+                                      onMouseEnter={(e) =>
+                                        showTruncatedTooltip(
+                                          e,
+                                          fullLabel,
+                                          inCurrentRun ? tc.id : `${tc.id} · 우측 ▶ 버튼으로 개별 실행`,
+                                        )
+                                      }
+                                      onMouseLeave={hideTooltip}
                                       className={`flex min-w-0 flex-1 items-center gap-1.5 text-left ${inCurrentRun ? 'cursor-pointer' : 'cursor-default'}`}
                                       style={{
                                         color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
                                       }}
                                     >
                                       <StatusDot status={tc.status} />
-                                      <span className="truncate text-[11.5px]">
+                                      <span data-trunc-label className="truncate text-[11.5px]">
                                         {tc.tc_id ? (
                                           <span className="font-mono-code mr-1 opacity-70">{tc.tc_id}</span>
                                         ) : null}
@@ -480,6 +576,31 @@ export function TestTreePanel({
           })
         )}
       </div>
+
+      {/* Truncated label floating tooltip (fixed so sidebar overflow never clips it) */}
+      {hoverTooltip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none fixed z-50 max-w-[380px] -translate-y-1/2 rounded-md border px-2.5 py-1.5 text-[11.5px] leading-snug shadow-lg"
+          style={{
+            top: `${hoverTooltip.top}px`,
+            left: `${hoverTooltip.left}px`,
+            backgroundColor: 'var(--bg-surface)',
+            borderColor: 'var(--border-strong)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <div className="whitespace-normal break-words font-medium">{hoverTooltip.text}</div>
+          {hoverTooltip.subtext && (
+            <div
+              className="mt-0.5 whitespace-normal break-all font-mono-code text-[10.5px]"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              {hoverTooltip.subtext}
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   )
 }
