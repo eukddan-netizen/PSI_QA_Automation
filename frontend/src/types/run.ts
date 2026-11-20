@@ -241,6 +241,34 @@ export function buildHierarchyTree(cases: TestCaseState[], isRunActive = true): 
   return result
 }
 
+export function parseTimestampMs(ts?: string | null): number | null {
+  if (!ts) return null
+  const normalized = ts.includes('T') ? ts : ts.replace(' ', 'T')
+  const ms = Date.parse(normalized)
+  return Number.isFinite(ms) ? ms : null
+}
+
+export function getElapsedSeconds(startedAt?: string | null, nowMs: number = Date.now()): number | null {
+  const startMs = parseTimestampMs(startedAt)
+  if (startMs === null) return null
+  return Math.max(0, (nowMs - startMs) / 1000)
+}
+
+export function formatElapsedDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0초'
+  const totalSeconds = Math.floor(seconds)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const secs = totalSeconds % 60
+  if (hours > 0) {
+    return `${hours}시간 ${String(minutes).padStart(2, '0')}분 ${String(secs).padStart(2, '0')}초`
+  }
+  if (minutes > 0) {
+    return `${minutes}분 ${String(secs).padStart(2, '0')}초`
+  }
+  return `${secs}초`
+}
+
 export function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0.00초'
   if (seconds < 60) {

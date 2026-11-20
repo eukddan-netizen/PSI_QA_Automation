@@ -5,6 +5,7 @@ import { SummaryStrip } from './components/SummaryStrip'
 import { TestTreePanel } from './components/TestTreePanel'
 import { TopBar } from './components/TopBar'
 import { useAutoFocus } from './hooks/useAutoFocus'
+import { useLiveNow } from './hooks/useLiveNow'
 import { useRunNotifications } from './hooks/useRunNotifications'
 import { useRunStream } from './hooks/useRunStream'
 import { buildHierarchyTree, mergeCatalogWithRunCases, type TestCaseState } from './types/run'
@@ -53,6 +54,11 @@ export function App() {
   } = useRunNotifications(run, runBatchSeq)
 
   const isRunActive = runner.is_running || run?.status === 'running'
+  const hasRunningCase = useMemo(
+    () => (run?.cases ?? []).some((c) => c.status === 'running'),
+    [run?.cases],
+  )
+  const nowMs = useLiveNow(hasRunningCase, 500)
   const runDomains = useMemo(
     () => buildHierarchyTree(run?.cases ?? [], isRunActive),
     [run?.cases, isRunActive],
@@ -115,7 +121,7 @@ export function App() {
         onDeleteRuns={deleteRuns}
       />
 
-      <SummaryStrip run={run} historyCount={runs.length} />
+      <SummaryStrip run={run} historyCount={runs.length} nowMs={nowMs} />
 
       {error && (
         <div
@@ -145,6 +151,7 @@ export function App() {
             runCaseNodeIds={runCaseNodeIds}
             activeNodeId={run?.active_nodeid}
             isRunning={runner.is_running}
+            nowMs={nowMs}
             catalogLoading={catalogCasesLoading}
             statusFilter={statusFilter}
             onChangeStatusFilter={setStatusFilter}
@@ -159,6 +166,7 @@ export function App() {
             statusFilter={statusFilter}
             autoFollow={autoFollow}
             isRunning={runner.is_running}
+            nowMs={nowMs}
             expandedCategories={expandedCategories}
             expandedCases={expandedCases}
             onToggleAutoFollow={setAutoFollow}

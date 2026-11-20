@@ -10,7 +10,15 @@ import {
   Play,
   RotateCw,
 } from 'lucide-react'
-import type { CategoryGroup, DomainGroup, LogLine, RunState, TestCaseState } from '../types/run'
+import {
+  formatElapsedDuration,
+  getElapsedSeconds,
+  type CategoryGroup,
+  type DomainGroup,
+  type LogLine,
+  type RunState,
+  type TestCaseState,
+} from '../types/run'
 import { StatusBadge, StatusDot } from './StatusBadge'
 
 interface ExecutionStreamProps {
@@ -20,6 +28,7 @@ interface ExecutionStreamProps {
   statusFilter: 'all' | 'failed' | 'running' | 'passed'
   autoFollow: boolean
   isRunning: boolean
+  nowMs?: number
   expandedCategories: Set<string>
   expandedCases: Set<string>
   onToggleAutoFollow: (val: boolean) => void
@@ -38,6 +47,7 @@ export function ExecutionStream({
   statusFilter,
   autoFollow,
   isRunning,
+  nowMs,
   expandedCategories,
   expandedCases,
   onToggleAutoFollow,
@@ -49,6 +59,10 @@ export function ExecutionStream({
   registerCaseRef,
 }: ExecutionStreamProps) {
   const activeCase = run?.cases.find((c) => c.nodeid === run.active_nodeid) ?? null
+  const activeElapsed =
+    activeCase && activeCase.status === 'running'
+      ? getElapsedSeconds(activeCase.started_at, nowMs)
+      : null
   const [launchingNodeId, setLaunchingNodeId] = useState<string | null>(null)
 
   const handleRunCase = async (tc: TestCaseState) => {
@@ -109,6 +123,18 @@ export function ExecutionStream({
                   {activeCase.title}
                 </span>
               </span>
+              {activeElapsed != null && (
+                <span
+                  className="font-mono-code tabular-nums shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium"
+                  style={{
+                    color: 'var(--status-run)',
+                    backgroundColor: 'var(--status-run-bg)',
+                    borderColor: 'var(--status-run-border)',
+                  }}
+                >
+                  {formatElapsedDuration(activeElapsed)}
+                </span>
+              )}
             </>
           ) : (
             <span style={{ color: 'var(--text-muted)' }}>
@@ -220,6 +246,7 @@ export function ExecutionStream({
                     expanded={expandedCategories.has(cat.key)}
                     expandedCases={expandedCases}
                     isRunning={isRunning}
+                    nowMs={nowMs}
                     launchingNodeId={launchingNodeId}
                     onToggleCategory={() => onToggleCategory(cat.key)}
                     onToggleCase={onToggleCase}
@@ -242,6 +269,7 @@ function CategoryAccordion({
   expanded,
   expandedCases,
   isRunning,
+  nowMs,
   launchingNodeId,
   onToggleCategory,
   onToggleCase,
@@ -253,6 +281,7 @@ function CategoryAccordion({
   expanded: boolean
   expandedCases: Set<string>
   isRunning: boolean
+  nowMs?: number
   launchingNodeId: string | null
   onToggleCategory: () => void
   onToggleCase: (nodeid: string) => void
@@ -267,6 +296,20 @@ function CategoryAccordion({
   })
 
   if (visibleCases.length === 0) return null
+
+  const runningExtraSec =
+    cat.status === 'running'
+      ? cat.cases.reduce((acc, tc) => {
+          if (tc.status !== 'running') return acc
+          return acc + (getElapsedSeconds(tc.started_at, nowMs) ?? 0)
+        }, 0)
+      : 0
+  const catBadgeDuration =
+    cat.status === 'running'
+      ? cat.duration + runningExtraSec
+      : cat.duration > 0
+        ? cat.duration
+        : null
 
   return (
     <div
@@ -305,7 +348,7 @@ function CategoryAccordion({
               오류 {cat.failed}건
             </span>
           )}
-          <StatusBadge status={cat.status} duration={cat.duration > 0 ? cat.duration : null} />
+          <StatusBadge status={cat.status} duration={catBadgeDuration} />
         </div>
       </button>
 
@@ -319,6 +362,7 @@ function CategoryAccordion({
               expanded={expandedCases.has(tc.nodeid)}
               isRunnerBusy={isRunning || launchingNodeId !== null}
               isLaunchingThis={launchingNodeId === tc.nodeid}
+              nowMs={nowMs}
               onToggle={() => onToggleCase(tc.nodeid)}
               onRunSingle={() => onRunSingleCase(tc)}
               registerRef={(el) => registerCaseRef(tc.nodeid, el)}
@@ -335,6 +379,7 @@ function CaseAccordion({
   expanded,
   isRunnerBusy,
   isLaunchingThis,
+  nowMs,
   onToggle,
   onRunSingle,
   registerRef,
@@ -343,6 +388,7 @@ function CaseAccordion({
   expanded: boolean
   isRunnerBusy: boolean
   isLaunchingThis: boolean
+  nowMs?: number
   onToggle: () => void
   onRunSingle: () => void
   registerRef: (el: HTMLDivElement | null) => void
@@ -350,6 +396,7 @@ function CaseAccordion({
   const isFailure = tc.status === 'failed' || tc.status === 'error'
   const isRunning = tc.status === 'running'
   const isPending = tc.status === 'pending'
+  const liveElapsed = isRunning ? getElapsedSeconds(tc.started_at, nowMs) : null
 
   return (
     <div
@@ -413,7 +460,7 @@ function CaseAccordion({
               {tc.logs.length} lines
             </span>
           )}
-          <StatusBadge status={tc.status} duration={tc.duration} />
+          <StatusBadge status={tc.status} duration={isRunning ? liveElapsed : tc.duration} />
           <button
             type="button"
             disabled={isRunnerBusy}

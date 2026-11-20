@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Play, RefreshCw, RotateCw, Search } from 'lucide-react'
 import {
   formatDuration,
+  formatElapsedDuration,
+  getElapsedSeconds,
   type DomainGroup,
   type RunStatus,
   type TestCaseState,
@@ -17,6 +19,7 @@ interface TestTreePanelProps {
   runCaseNodeIds: Set<string>
   activeNodeId?: string | null
   isRunning: boolean
+  nowMs?: number
   catalogLoading?: boolean
   statusFilter: 'all' | 'failed' | 'running' | 'passed'
   onChangeStatusFilter: (f: 'all' | 'failed' | 'running' | 'passed') => void
@@ -33,6 +36,7 @@ export function TestTreePanel({
   runCaseNodeIds,
   activeNodeId,
   isRunning,
+  nowMs,
   catalogLoading = false,
   statusFilter,
   onChangeStatusFilter,
@@ -517,12 +521,25 @@ export function TestTreePanel({
                                       </span>
                                     </button>
 
+                                    {inCurrentRun && tc.status === 'running' && (() => {
+                                      const liveSec = getElapsedSeconds(tc.started_at, nowMs)
+                                      if (liveSec === null) return null
+                                      return (
+                                        <span
+                                          className="font-mono-code tabular-nums shrink-0 text-[10px] font-medium"
+                                          style={{ color: 'var(--status-run)' }}
+                                        >
+                                          {formatElapsedDuration(liveSec)}
+                                        </span>
+                                      )
+                                    })()}
+
                                     {inCurrentRun &&
                                       tc.duration != null &&
                                       tc.status !== 'running' &&
                                       tc.status !== 'pending' && (
                                         <span
-                                          className="font-mono-code shrink-0 text-[10px]"
+                                          className="font-mono-code tabular-nums shrink-0 text-[10px]"
                                           style={{ color: 'var(--text-muted)' }}
                                         >
                                           {tc.duration >= 60 ? formatDuration(tc.duration) : `${tc.duration.toFixed(1)}초`}

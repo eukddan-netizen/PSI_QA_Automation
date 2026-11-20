@@ -1,6 +1,19 @@
-import { formatDuration, type RunState } from '../types/run'
+import {
+  formatDuration,
+  formatElapsedDuration,
+  getElapsedSeconds,
+  type RunState,
+} from '../types/run'
 
-export function SummaryStrip({ run, historyCount = 0 }: { run: RunState | null; historyCount?: number }) {
+export function SummaryStrip({
+  run,
+  historyCount = 0,
+  nowMs,
+}: {
+  run: RunState | null
+  historyCount?: number
+  nowMs?: number
+}) {
   if (!run) {
     return (
       <div
@@ -23,6 +36,17 @@ export function SummaryStrip({ run, historyCount = 0 }: { run: RunState | null; 
   const { summary } = run
   const pct = summary.total > 0 ? Math.round((summary.completed / summary.total) * 100) : 0
   const remaining = Math.max(0, summary.total - summary.completed)
+  const runningExtraSec =
+    run.status === 'running'
+      ? run.cases.reduce((acc, tc) => {
+          if (tc.status !== 'running') return acc
+          return acc + (getElapsedSeconds(tc.started_at, nowMs) ?? 0)
+        }, 0)
+      : 0
+  const displayDuration =
+    run.status === 'running' && runningExtraSec > 0
+      ? formatElapsedDuration(summary.duration_sec + runningExtraSec)
+      : formatDuration(summary.duration_sec)
 
   return (
     <div
@@ -49,7 +73,7 @@ export function SummaryStrip({ run, historyCount = 0 }: { run: RunState | null; 
           />
           <Metric label="제외" value={`${summary.skipped}`} color="var(--status-skip)" />
           <Metric label="정상률" value={`${summary.pass_rate.toFixed(1)}%`} />
-          <Metric label="누적시간" value={formatDuration(summary.duration_sec)} />
+          <Metric label="누적시간" value={displayDuration} />
         </div>
 
         <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>

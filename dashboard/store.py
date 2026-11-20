@@ -488,6 +488,8 @@ class RunStore:
                 if case is not None:
                     case.status = "running"
                     case.started_at = event.timestamp
+                    case.duration = None
+                    case.finished_at = None
                     run.active_nodeid = nodeid
                     summary = self._recompute_summary_unlocked(run)
                     self.broadcaster.publish(

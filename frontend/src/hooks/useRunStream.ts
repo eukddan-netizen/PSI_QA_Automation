@@ -240,7 +240,9 @@ export function useRunStream(): UseRunStreamResult {
           active_nodeid: data.nodeid,
           summary: data.summary,
           cases: prev.cases.map((c) =>
-            c.nodeid === data.nodeid ? { ...c, status: 'running', started_at: data.started_at } : c,
+            c.nodeid === data.nodeid
+              ? { ...c, status: 'running', started_at: data.started_at, duration: null, finished_at: null }
+              : c,
           ),
         }
       })

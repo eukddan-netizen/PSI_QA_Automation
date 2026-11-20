@@ -1,5 +1,5 @@
 import { Check, Loader2, Minus, X, AlertTriangle, Clock } from 'lucide-react'
-import { formatDuration, type TestStatus } from '../types/run'
+import { formatDuration, formatElapsedDuration, type TestStatus } from '../types/run'
 
 const STATUS_META: Record<
   TestStatus,
@@ -99,8 +99,11 @@ export function StatusBadge({
       {status === 'warning' && <AlertTriangle className="h-3 w-3" />}
       {status === 'pending' && <Clock className="h-3 w-3" />}
       <span>{meta.label}</span>
+      {duration != null && status === 'running' && (
+        <span className="tabular-nums opacity-90">· {formatElapsedDuration(duration)}</span>
+      )}
       {duration != null && status !== 'running' && status !== 'pending' && (
-        <span className="opacity-75">· {formatDuration(duration)}</span>
+        <span className="tabular-nums opacity-75">· {formatDuration(duration)}</span>
       )}
     </span>
   )
